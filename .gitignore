@@ -1,0 +1,48 @@
+# ignore output files from testing
+output*
+workloads/*.dat
+statistics.dat
+key_stats.dat
+test.properties
+output.log
+output/
+
+# ignore standard Eclipse files
+.project
+.classpath
+.settings
+.checkstyle
+
+# ignore standard IntelliJ files
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# ignore standard Vim and Emacs temp files
+*.swp
+*~
+
+# ignore standard Mac OS X files/dirs
+.DS_Store
+
+# ignore Python virtual environment
+venv/
+
+# Maven ignore
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Ignore Gradle build output directory
+build
