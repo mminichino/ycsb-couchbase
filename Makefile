@@ -5,6 +5,10 @@ export PROJECT_VERSION := $(shell cat VERSION)
 commit:
 		git commit -am "Version $(shell cat VERSION)"
 		git push
+sync:
+		rsync -acv --exclude db/ --exclude .DS_Store core/src/main/java/site/ycsb/ ../YCSB/core/src/main/java/site/ycsb/
+		rsync -acv --exclude .DS_Store core/src/main/java/site/ycsb/db/couchbase3/ ../YCSB/couchbase3/src/main/java/site/ycsb/db/couchbase3/
+		rsync -acv --exclude .DS_Store workloads/ ../YCSB/workloads/
 build:
 		bumpversion --allow-dirty build
 patch:
