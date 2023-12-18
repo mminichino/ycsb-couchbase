@@ -27,6 +27,7 @@ import org.apache.htrace.core.TraceScope;
 import org.apache.htrace.core.Tracer;
 
 import java.io.*;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -832,7 +833,7 @@ public final class Client {
         || (propFile = classloader.getResource("test.properties")) != null) {
       try {
         Properties properties = new Properties();
-        properties.load(Files.newInputStream(Paths.get(propFile.getFile())));
+        properties.load(propFile.openStream());
         props.putAll(properties);
       } catch (IOException e) {
         System.out.println("Can not open DB properties file " + e.getMessage());

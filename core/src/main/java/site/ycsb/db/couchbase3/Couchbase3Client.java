@@ -121,7 +121,7 @@ public class Couchbase3Client extends DB {
     if ((propFile = classloader.getResource(PROPERTY_FILE)) != null
         || (propFile = classloader.getResource(PROPERTY_TEST)) != null) {
       try {
-        properties.load(Files.newInputStream(Paths.get(propFile.getFile())));
+        properties.load(propFile.openStream());
       } catch (IOException e) {
         throw new DBException(e);
       }

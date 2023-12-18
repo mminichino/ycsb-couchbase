@@ -2,7 +2,7 @@
 #
 SCRIPT_PATH=$(dirname "$0")
 SCRIPT_ROOT=$(cd "$SCRIPT_PATH/.." && pwd)
-CLASSPATH=${SCRIPT_ROOT}/conf
+CLASSPATH="${SCRIPT_ROOT}/conf:${SCRIPT_ROOT}/lib/*"
 THREADCOUNT_LOAD=32
 THREADCOUNT_RUN=256
 RECORDCOUNT=1000000
@@ -11,16 +11,6 @@ RUNTIME=180
 RUN_MODE=0
 LOAD_MODE=0
 WORKLOAD=""
-
-NEW_PATH=$(find "$SCRIPT_ROOT" -name \*.jar -type f |
-{
-while IFS= read -r line; do
-    export CLASSPATH=${CLASSPATH}:$line
-done
-echo "$CLASSPATH"
-})
-
-CLASSPATH=$NEW_PATH
 
 while getopts "w:R:O:T:lr" opt
 do

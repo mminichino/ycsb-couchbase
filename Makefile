@@ -21,11 +21,14 @@ major:
 setup:
 		python setup.py sdist
 package:
-		mvn clean install -P couchbase
+		mvn clean install
 release: package download
 download:
 		gh release create -R "mminichino/$(PROJECT_NAME)" \
 		-t "Release $(PROJECT_VERSION)" \
 		-n "Release $(PROJECT_VERSION)" \
 		$(PROJECT_VERSION) \
-		./distribution/target/ycsb-couchbase.zip
+		./core/target/ycsb-couchbase.zip
+recall:
+		gh release delete $(PROJECT_VERSION) \
+		--cleanup-tag -y
