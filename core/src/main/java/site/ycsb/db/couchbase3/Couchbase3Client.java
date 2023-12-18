@@ -27,6 +27,7 @@ import com.couchbase.client.core.env.NetworkResolution;
 import com.couchbase.client.core.env.SecurityConfig;
 import com.couchbase.client.core.env.TimeoutConfig;
 import com.couchbase.client.core.error.DocumentNotFoundException;
+import com.couchbase.client.core.retry.FailFastRetryStrategy;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
 import com.couchbase.client.java.env.ClusterEnvironment;
@@ -39,8 +40,6 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -85,7 +84,7 @@ import site.ycsb.measurements.StatisticsFactory;
 
 public class Couchbase3Client extends DB {
   protected static final ch.qos.logback.classic.Logger LOGGER =
-      (ch.qos.logback.classic.Logger)LoggerFactory.getLogger("com.couchbase.CouchbaseClient");
+      (ch.qos.logback.classic.Logger)LoggerFactory.getLogger("site.ycsb.db.couchbase3.Couchbase3Client");
   private static final String PROPERTY_FILE = "db.properties";
   private static final String PROPERTY_TEST = "test.properties";
   public static final String COUCHBASE_HOST = "couchbase.hostname";
@@ -172,7 +171,7 @@ public class Couchbase3Client extends DB {
               .enableMutationTokens(false);
 
           Consumer<TimeoutConfig.Builder> timeOutConfiguration = timeoutConfig -> timeoutConfig
-              .kvTimeout(Duration.ofSeconds(2))
+              .kvTimeout(Duration.ofSeconds(5))
               .connectTimeout(Duration.ofSeconds(5))
               .queryTimeout(Duration.ofSeconds(75));
 
@@ -246,7 +245,7 @@ public class Couchbase3Client extends DB {
         if (retryNumber == retryCount) {
           throw e;
         } else {
-          double factor = waitFactor * Math.pow(2, retryNumber);
+          double factor = waitFactor * retryNumber;
           long wait = (long) factor;
           try {
             Thread.sleep(wait);
@@ -420,14 +419,17 @@ public class Couchbase3Client extends DB {
                 .readonly(true)
                 .adhoc(adhoc)
                 .maxParallelism(maxParallelism)
+                .retryStrategy(FailFastRetryStrategy.INSTANCE)
                 .parameters(JsonArray.from(startkey, recordcount)))
             .flatMapMany(res -> res.rowsAsObject().parallel())
-            .doOnError(e -> {
-              throw new RuntimeException(e.getMessage());
-            })
-            .onErrorStop()
             .parallel()
-            .subscribe();
+            .subscribe(
+                    next -> {},
+                    error ->
+                    {
+                      throw new RuntimeException(error);
+                    }
+            );
         return Status.OK;
       });
     } catch (Throwable t) {

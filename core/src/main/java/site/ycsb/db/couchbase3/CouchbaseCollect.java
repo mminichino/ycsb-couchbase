@@ -25,9 +25,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class CouchbaseCollect extends RemoteStatistics {
 
   protected static final ch.qos.logback.classic.Logger LOGGER =
-      (ch.qos.logback.classic.Logger) LoggerFactory.getLogger("com.couchbase.CouchbaseCollect");
+      (ch.qos.logback.classic.Logger) LoggerFactory.getLogger("site.ycsb.db.couchbase3.CouchbaseCollect");
   protected static final ch.qos.logback.classic.Logger STATISTICS =
-      (ch.qos.logback.classic.Logger)LoggerFactory.getLogger("com.couchbase.statistics");
+      (ch.qos.logback.classic.Logger)LoggerFactory.getLogger("site.ycsb.db.couchbase3.statistics");
   private static final String PROPERTY_FILE = "db.properties";
   private static final String PROPERTY_TEST = "test.properties";
   public static final String COUCHBASE_HOST = "couchbase.hostname";

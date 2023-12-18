@@ -51,7 +51,7 @@ IF [%WORKLOAD%]==[] (
 
 for /L %%i in (1,1,%n%) do (
   SET "LOADOPTS=-db site.ycsb.db.couchbase3.Couchbase3Client -P !workloads[%%i]! -threads %THREADCOUNT_LOAD% -p recordcount=%RECORDCOUNT% -s -load"
-  SET "RUNOPTS=-db site.ycsb.db.couchbase3.Couchbase3Client -P !workloads[%%i]! -threads %THREADCOUNT_RUN% -p recordcount=%RECORDCOUNT% -p operationcount=%OPCOUNT% -p maxexecutiontime=%RUN_MODE% -s -t"
+  SET "RUNOPTS=-db site.ycsb.db.couchbase3.Couchbase3Client -P !workloads[%%i]! -threads %THREADCOUNT_RUN% -p recordcount=%RECORDCOUNT% -p operationcount=%OPCOUNT% -p maxexecutiontime=%RUNTIME% -s -t"
   IF %RUN_MODE% EQU 0 (
     java -cp "%CLASSPATH%" site.ycsb.Client !LOADOPTS!
   )

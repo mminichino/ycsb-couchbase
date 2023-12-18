@@ -49,7 +49,7 @@ class CouchbaseConnectException extends Exception {
  */
 public final class CouchbaseConnect {
   private static final ch.qos.logback.classic.Logger LOGGER =
-      (ch.qos.logback.classic.Logger) LoggerFactory.getLogger("com.couchbase.CouchbaseConnect");
+      (ch.qos.logback.classic.Logger) LoggerFactory.getLogger("site.ycsb.db.couchbase3.CouchbaseConnect");
   private static volatile Cluster cluster;
   private static volatile Bucket bucket;
   private static volatile Scope scope;
