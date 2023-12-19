@@ -12,7 +12,7 @@ for more details and instructions.
 You can either download the release zip and run it, or just clone from master.
 
 ```
-curl -OLs https://github.com/couchbaselabs/ycsb-couchbase/releases/download/1.0.1/ycsb-couchbase.zip
+curl -OLs https://github.com/mminichino/ycsb-couchbase/releases/download/2.0.0/ycsb-couchbase.zip
 ```
 ```
 unzip ycsb-couchbase.zip
@@ -20,45 +20,27 @@ unzip ycsb-couchbase.zip
 ```
 cd ycsb-couchbase
 ```
+On Linux/macOS:
 ```
-sudo ./setup.sh
+vi conf/db.properties
 ```
-
-### Manual Setup
-The bucket and index automation in the helper script requires the ```cbc``` CLI that is part of ```libcouchbase```. You can 
-read about it [here](https://docs.couchbase.com/c-sdk/current/hello-world/cbc.html).
-
-First create a repo configuration for your Linux distribution per the [documentation](https://docs.couchbase.com/c-sdk/current/hello-world/start-using-sdk.html) and then install the packages.
-To install it on Red Hat/CentOS Linux:
-
+On Windows:
 ```
-yum install -y libcouchbase3 libcouchbase-devel libcouchbase3-tools
+notepad conf\db.properties
 ```
-
-For Debian type systems such as Ubuntu:
-
+On Linux macOS:
 ```
-apt-get install -y libcouchbase3 libcouchbase-dev libcouchbase3-tools libcouchbase-dbg libcouchbase3-libev libcouchbase3-libevent
+bin/run.sh
+```
+On Windows:
+```
+bin\run.bat
 ```
 
-Additionally, the helper script requires the ```jq``` and ```python3``` packages if not already installed.
-
-### 3. Run the Tests (A-F)
+### 3. Run a specific test
 
 ```
-./run_cb.sh -h cbnode-0000.domain.com -u user -p password 
-```
-
-To use SSL to connect to the cluster:
-
-```
-./run_cb.sh -h cbnode-0000.domain.com -s -u user -p password
-```
-
-To run a specific workload (YCSB-A in this example):
-
-```
-./run_cb.sh -h cbnode-0000.domain.com -u user -p password -w a
+bin/run.sh -w workloads/workloade
 ```
 
 ### Manual Mode

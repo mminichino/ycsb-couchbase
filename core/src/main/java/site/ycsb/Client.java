@@ -17,6 +17,12 @@
 
 package site.ycsb;
 
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Appender;
+import ch.qos.logback.classic.Logger;
+import org.slf4j.LoggerFactory;
+
 import site.ycsb.measurements.Measurements;
 import site.ycsb.measurements.RemoteStatistics;
 import site.ycsb.measurements.StatisticsFactory;
@@ -27,11 +33,11 @@ import org.apache.htrace.core.TraceScope;
 import org.apache.htrace.core.Tracer;
 
 import java.io.*;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.CountDownLatch;
@@ -328,6 +334,28 @@ public final class Client {
     }
   }
 
+  private static void copyLogFiles(Properties props) {
+    String workloadFileName = props.getProperty(WORKLOAD_NAME_PROPERTY, null);
+    boolean loadMode = props.getProperty(DO_TRANSACTIONS_PROPERTY, "true").equals("false");
+    String suffix = loadMode ? "-load-" : "-run-";
+
+    if (workloadFileName != null) {
+      File cwd = new File(".");
+      File[] files = cwd.listFiles((dir, name) -> name.endsWith(".log"));
+
+      for (File logFile : files != null ? files : new File[0]) {
+        Path path = Paths.get("output", workloadFileName + suffix + logFile.getName());
+        try {
+          Files.createDirectories(path.getParent());
+          Files.copy(logFile.toPath(), path, StandardCopyOption.REPLACE_EXISTING);
+          System.err.printf("Copying log file %s to %s\n", logFile.getName(), path);
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+    }
+  }
+
   @SuppressWarnings("unchecked")
   public static void main(String[] args) {
     Properties props = parseArguments(args);
@@ -432,7 +460,7 @@ public final class Client {
 
       opsDone = 0;
 
-      for (Map.Entry<Thread, ClientThread> entry : threads.entrySet()) {
+      for (Entry<Thread, ClientThread> entry : threads.entrySet()) {
         try {
           entry.getKey().join();
           opsDone += entry.getValue().getOpsDone();
@@ -491,6 +519,14 @@ public final class Client {
         System.err.println(e.getMessage());
         e.printStackTrace(System.err);
       }
+    }
+
+    try {
+      copyLogFiles(props);
+    } catch (Exception e) {
+      System.err.println("Could not copy log file: " + e.getMessage());
+      e.printStackTrace();
+      System.exit(1);
     }
 
     System.exit(0);

@@ -28,15 +28,7 @@ LICENSE file.
   </appender>
 
   <appender name="STATISTICS" class="ch.qos.logback.core.FileAppender">
-    <file>statistics.dat</file>
-    <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
-      <pattern>%msg</pattern>
-    </encoder>
-  </appender>
-
-  <appender name="KEYSTATS" class="ch.qos.logback.core.FileAppender">
-    <file>key_stats.dat</file>
-    <append>false</append>
+    <file>statistics.log</file>
     <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
       <pattern>%msg</pattern>
     </encoder>

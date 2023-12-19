@@ -2,6 +2,7 @@
 output*
 workloads/*.dat
 statistics.dat
+statistics.log
 key_stats.dat
 test.properties
 output.log
