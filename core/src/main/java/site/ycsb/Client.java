@@ -17,12 +17,6 @@
 
 package site.ycsb;
 
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.Appender;
-import ch.qos.logback.classic.Logger;
-import org.slf4j.LoggerFactory;
-
 import site.ycsb.measurements.Measurements;
 import site.ycsb.measurements.RemoteStatistics;
 import site.ycsb.measurements.StatisticsFactory;

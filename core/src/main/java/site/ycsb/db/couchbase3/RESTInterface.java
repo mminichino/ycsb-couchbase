@@ -121,9 +121,9 @@ public class RESTInterface {
 
     clientBuilder.sslSocketFactory(sslContext.getSocketFactory(), (X509TrustManager) trustAllCerts[0]);
     clientBuilder.hostnameVerifier((hostname, session) -> true);
-    clientBuilder.connectTimeout(Duration.ofSeconds(15));
-    clientBuilder.readTimeout(Duration.ofSeconds(15));
-    clientBuilder.writeTimeout(Duration.ofSeconds(15));
+    clientBuilder.connectTimeout(Duration.ofSeconds(20));
+    clientBuilder.readTimeout(Duration.ofSeconds(20));
+    clientBuilder.writeTimeout(Duration.ofSeconds(20));
 
     if (token != null) {
       credential = "Bearer " + token;

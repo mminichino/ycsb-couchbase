@@ -1,5 +1,8 @@
 package site.ycsb.db.couchbase3;
 
+/**
+ * RESTInterface Exception Class.
+ */
 public class RESTException extends Exception {
   private Integer code = 0;
 

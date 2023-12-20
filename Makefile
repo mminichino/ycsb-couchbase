@@ -9,6 +9,7 @@ sync:
 		rsync -acv --exclude db/ --exclude .DS_Store core/src/main/java/site/ycsb/ ../YCSB/core/src/main/java/site/ycsb/
 		rsync -acv --exclude db/ --exclude .DS_Store core/src/test/java/site/ycsb/ ../YCSB/core/src/test/java/site/ycsb/
 		rsync -acv --exclude .DS_Store core/src/main/java/site/ycsb/db/couchbase3/ ../YCSB/couchbase3/src/main/java/site/ycsb/db/couchbase3/
+		rsync -acv --exclude .DS_Store core/src/main/resources/logback.xml ../YCSB/couchbase3/src/main/resources/
 		rsync -acv --exclude .DS_Store workloads/ ../YCSB/workloads/
 build:
 		bumpversion --allow-dirty build

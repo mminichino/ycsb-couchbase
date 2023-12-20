@@ -37,13 +37,6 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
-class CouchbaseConnectException extends Exception {
-
-  public CouchbaseConnectException(String message) {
-    super(message);
-  }
-}
-
 /**
  * Couchbase Connection Utility.
  */
@@ -231,8 +224,8 @@ public final class CouchbaseConnect {
               .enableMutationTokens(false);
 
           Consumer<TimeoutConfig.Builder> timeOutConfiguration = timeoutConfig -> timeoutConfig
-              .kvTimeout(Duration.ofSeconds(2))
-              .connectTimeout(Duration.ofSeconds(5))
+              .kvTimeout(Duration.ofSeconds(5))
+              .connectTimeout(Duration.ofSeconds(15))
               .queryTimeout(Duration.ofSeconds(75));
 
           environment = ClusterEnvironment
@@ -243,7 +236,7 @@ public final class CouchbaseConnect {
               .build();
           cluster = Cluster.connect(connectString,
               ClusterOptions.clusterOptions(username, password).environment(environment));
-          cluster.waitUntilReady(Duration.ofSeconds(10));
+          cluster.waitUntilReady(Duration.ofSeconds(15));
           bucket = cluster.bucket(bucketName);
           bucketMgr = cluster.buckets();
           hostMap = getClusterInfo();
@@ -251,7 +244,6 @@ public final class CouchbaseConnect {
           external = getExternalFlag();
         }
       } catch(Exception e) {
-        e.printStackTrace();
         logError(e, connectString);
       }
     }
@@ -262,7 +254,7 @@ public final class CouchbaseConnect {
     bucketMgr = null;
     bucket = null;
     if (cluster != null) {
-      cluster.disconnect(Duration.ofSeconds(10));
+      cluster.disconnect(Duration.ofSeconds(15));
     }
     if (environment != null) {
       environment.shutdown();
@@ -480,7 +472,7 @@ public final class CouchbaseConnect {
       }
     }
     Bucket check = cluster.bucket(bucket);
-    check.waitUntilReady(Duration.ofSeconds(10));
+    check.waitUntilReady(Duration.ofSeconds(15));
   }
 
   public void dropBucket(String bucket) {
