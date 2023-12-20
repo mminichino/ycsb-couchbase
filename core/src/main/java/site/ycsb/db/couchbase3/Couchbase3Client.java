@@ -36,9 +36,6 @@ import com.couchbase.client.java.codec.RawJsonTranscoder;
 import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.io.Writer;
 import java.net.URL;
 import java.time.Duration;
 import java.util.*;
@@ -74,7 +71,6 @@ public class Couchbase3Client extends DB {
   private static volatile Collection collection;
   private static volatile ClusterEnvironment environment;
   private static String bucketName;
-  private final ArrayList<Throwable> errors = new ArrayList<>();
   private boolean adhoc;
   private int maxParallelism;
   private static int ttlSeconds;
@@ -191,9 +187,6 @@ public class Couchbase3Client extends DB {
 
   @Override
   public synchronized void cleanup() {
-    for (Throwable t : errors) {
-      LOGGER.error(t.getMessage(), t);
-    }
   }
 
   private static <T>T retryBlock(Callable<T> block) throws Exception {
@@ -203,11 +196,7 @@ public class Couchbase3Client extends DB {
       try {
         return block.call();
       } catch (Exception e) {
-        LOGGER.error(String.format("Retry count %d: %s: error: %s", retryCount, e.getClass(), e.getMessage()));
-        Writer buffer = new StringWriter();
-        PrintWriter pw = new PrintWriter(buffer);
-        e.printStackTrace(pw);
-        LOGGER.error(String.format("%s", buffer));
+        LOGGER.debug("Retry count: " + retryCount + " error: " + e.getMessage(), e);
         if (retryNumber == retryCount) {
           throw e;
         } else {
@@ -244,8 +233,7 @@ public class Couchbase3Client extends DB {
         }
       });
     } catch (Throwable t) {
-      errors.add(t);
-      LOGGER.error("read failed with exception : " + t);
+      LOGGER.error("read transaction exception: " + t.getMessage(), t);
       return Status.ERROR;
     }
   }
@@ -300,8 +288,7 @@ public class Couchbase3Client extends DB {
         return Status.OK;
       });
     } catch (Throwable t) {
-      errors.add(t);
-      LOGGER.error("update failed with exception :" + t);
+      LOGGER.error("update transaction exception: " + t.getMessage(), t);
       return Status.ERROR;
     }
   }
@@ -325,8 +312,7 @@ public class Couchbase3Client extends DB {
         return Status.OK;
       });
     } catch (Throwable t) {
-      errors.add(t);
-      LOGGER.error("update failed with exception :" + t);
+      LOGGER.error("update transaction exception: " + t.getMessage(), t);
       return Status.ERROR;
     }
   }
@@ -358,8 +344,7 @@ public class Couchbase3Client extends DB {
         return Status.OK;
       });
     } catch (Throwable t) {
-      errors.add(t);
-      LOGGER.error("delete failed with exception :" + t);
+      LOGGER.error("delete transaction exception: " + t.getMessage(), t);
       return Status.ERROR;
     }
   }
@@ -399,8 +384,7 @@ public class Couchbase3Client extends DB {
         return Status.OK;
       });
     } catch (Throwable t) {
-      errors.add(t);
-      LOGGER.error("scan failed with exception :" + t);
+      LOGGER.error("scan transaction exception: " + t.getMessage(), t);
       return Status.ERROR;
     }
   }

@@ -17,18 +17,13 @@ import java.util.Scanner;
  */
 public class CouchbaseCapella {
   private static final String CAPELLA_API_ENDPOINT = "cloudapi.cloud.couchbase.com";
-  private RESTInterface capella;
-  private String project;
-  private String database;
+  private final RESTInterface capella;
   private String apiKey;
-  private String organizationId;
-  private String projectId;
-  private String databaseId;
+  private final String organizationId;
+  private final String projectId;
+  private final String databaseId;
 
   public CouchbaseCapella(String project, String database) {
-    this.project = project;
-    this.database = database;
-
     Path homePath = Paths.get(System.getProperty("user.home"));
     Path tokenFilePath = Paths.get(homePath.toString(), ".capella", "default-api-key-token.txt");
 
