@@ -16,42 +16,24 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.*;
-
-class RESTException extends Exception {
-  private Integer code = 0;
-
-  public RESTException(Integer code, String message) {
-    super(message);
-    this.code = code;
-  }
-
-  public RESTException(String message) {
-    super(message);
-  }
-
-  public Integer getCode() {
-    return code;
-  }
-}
 
 /**
  * Connect To REST Interface.
  */
 public class RESTInterface {
-  private String hostname;
+  private final String hostname;
   private String username;
   private String password;
   private String token = null;
-  private Boolean useSsl;
-  private Integer port;
+  private final Boolean useSsl;
+  private final Integer port;
   private String urlPrefix;
-  private OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder();
+  private final OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder();
   private OkHttpClient client;
-  private Authenticator authenticator;
-  private SSLContext sslContext;
   private String credential;
-  private boolean enableDebug = false;
+  private final boolean enableDebug;
   public static final String DEFAULT_HTTP_PREFIX = "http://";
   public static final String DEFAULT_HTTPS_PREFIX = "https://";
   public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
@@ -62,6 +44,7 @@ public class RESTInterface {
     this.password = password;
     this.useSsl = useSsl;
     this.port = port;
+    this.enableDebug = false;
     this.init();
   }
 
@@ -70,6 +53,7 @@ public class RESTInterface {
     this.username = username;
     this.password = password;
     this.useSsl = useSsl;
+    this.enableDebug = false;
     if (useSsl) {
       this.port = 443;
     } else {
@@ -82,6 +66,7 @@ public class RESTInterface {
     this.hostname = hostname;
     this.token = token;
     this.useSsl = useSsl;
+    this.enableDebug = false;
     if (useSsl) {
       this.port = 443;
     } else {
@@ -121,7 +106,8 @@ public class RESTInterface {
         }
     };
 
-    try {
+      SSLContext sslContext;
+      try {
       sslContext = SSLContext.getInstance("SSL");
     } catch (NoSuchAlgorithmException e) {
       throw new RuntimeException(e);
@@ -135,6 +121,9 @@ public class RESTInterface {
 
     clientBuilder.sslSocketFactory(sslContext.getSocketFactory(), (X509TrustManager) trustAllCerts[0]);
     clientBuilder.hostnameVerifier((hostname, session) -> true);
+    clientBuilder.connectTimeout(Duration.ofSeconds(15));
+    clientBuilder.readTimeout(Duration.ofSeconds(15));
+    clientBuilder.writeTimeout(Duration.ofSeconds(15));
 
     if (token != null) {
       credential = "Bearer " + token;
