@@ -31,5 +31,4 @@ download:
 		$(PROJECT_VERSION) \
 		./core/target/ycsb-couchbase.zip
 recall:
-		gh release delete $(PROJECT_VERSION) \
-		--cleanup-tag -y
+		gh release delete -R "mminichino/$(PROJECT_NAME)" $(PROJECT_VERSION) --cleanup-tag -y
