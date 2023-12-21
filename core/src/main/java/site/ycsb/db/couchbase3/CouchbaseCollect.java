@@ -8,8 +8,6 @@ import site.ycsb.measurements.RemoteStatistics;
 
 import java.io.IOException;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -61,7 +59,7 @@ public class CouchbaseCollect extends RemoteStatistics {
     if ((propFile = classloader.getResource(PROPERTY_FILE)) != null
         || (propFile = classloader.getResource(PROPERTY_TEST)) != null) {
       try {
-        properties.load(Files.newInputStream(Paths.get(propFile.getFile())));
+        properties.load(propFile.openStream());
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -236,7 +234,7 @@ public class CouchbaseCollect extends RemoteStatistics {
     if (!block.get("data").getAsJsonArray().asList().isEmpty()) {
       JsonArray values = block.get("data").getAsJsonArray().get(0).getAsJsonObject().get("values").getAsJsonArray();
       for (JsonElement entry : values) {
-        metric += Double.parseDouble(entry.getAsJsonArray().get(1).getAsString());
+        metric += Math.round(Double.parseDouble(entry.getAsJsonArray().get(1).getAsString()));
       }
       return metric / values.size();
     }
@@ -262,7 +260,7 @@ public class CouchbaseCollect extends RemoteStatistics {
     if (!block.get("data").getAsJsonArray().asList().isEmpty()) {
       JsonArray values = block.get("data").getAsJsonArray().get(0).getAsJsonObject().get("values").getAsJsonArray();
       for (JsonElement entry : values) {
-        metric += (long) Double.parseDouble(entry.getAsJsonArray().get(1).getAsString());
+        metric += Math.round(Double.parseDouble(entry.getAsJsonArray().get(1).getAsString()));
       }
     }
     return metric;

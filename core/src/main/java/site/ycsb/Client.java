@@ -230,6 +230,7 @@ public final class Client {
     System.out.println("  -s:  show status during run (default: no status)");
     System.out.println("  -l label:  use label for status (e.g. to label one experiment out of a whole batch)");
     System.out.println("  -manual: skip test setup and cleanup automation");
+    System.out.println("  -stats: enable stats collection if stats class is configured");
     System.out.println("");
     System.out.println("Required properties:");
     System.out.println("  " + WORKLOAD_PROPERTY + ": the name of the workload class to use (e.g. " +
@@ -695,6 +696,7 @@ public final class Client {
   }
 
   private static String getWorkloadName(String path) {
+    path = path.replaceAll("^[.][/\\\\]", "");
     String[] parts = path.split("[/\\\\]", 2);
     List<String> elements = Arrays.asList(parts);
     String name = elements.get(elements.size() - 1);
@@ -754,6 +756,9 @@ public final class Client {
         argindex++;
       } else if (args[argindex].compareTo("-manual") == 0) {
         props.setProperty(MANUAL_MODE, String.valueOf(true));
+        argindex++;
+      } else if (args[argindex].compareTo("-stats") == 0) {
+        props.setProperty(STATISTICS_ENABLE_PROPERTY, String.valueOf(true));
         argindex++;
       } else if (args[argindex].compareTo("-db") == 0) {
         argindex++;
@@ -845,6 +850,21 @@ public final class Client {
       System.exit(0);
     }
 
+    //Merge in properties from driver config file if present
+    ClassLoader classloader = Thread.currentThread().getContextClassLoader();
+    URL propFile;
+    if ((propFile = classloader.getResource("db.properties")) != null
+            || (propFile = classloader.getResource("test.properties")) != null) {
+      try {
+        Properties properties = new Properties();
+        properties.load(propFile.openStream());
+        fileprops.putAll(properties);
+      } catch (IOException e) {
+        System.out.println("Can not open DB properties file " + e.getMessage());
+        System.exit(1);
+      }
+    }
+
     //overwrite file properties with properties from the command line
 
     //Issue #5 - remove call to stringPropertyNames to make compilable under Java 1.5
@@ -855,21 +875,6 @@ public final class Client {
     }
 
     props = fileprops;
-
-    //Merge in properties from driver config file if present
-    ClassLoader classloader = Thread.currentThread().getContextClassLoader();
-    URL propFile;
-    if ((propFile = classloader.getResource("db.properties")) != null
-        || (propFile = classloader.getResource("test.properties")) != null) {
-      try {
-        Properties properties = new Properties();
-        properties.load(propFile.openStream());
-        props.putAll(properties);
-      } catch (IOException e) {
-        System.out.println("Can not open DB properties file " + e.getMessage());
-        System.exit(1);
-      }
-    }
 
     if (!checkRequiredProperties(props)) {
       System.out.println("Failed check required properties.");

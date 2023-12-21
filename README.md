@@ -95,10 +95,32 @@ Under normal circumstances you should only need to set the hostname, username, a
 | couchbase.adhoc          | false         | If true queries will not use a pre-generated plan                                 |
 | couchbase.maxParallelism | 0             | Set maximum parallelism for queries                                               |
 | couchbase.kvEndpoints    | 4             | Set the number of KV endpoints for data operations                                |
-| couchbase.sslMode        | true          | Use SSL                                                                           |
+| couchbase.sslMode        | true          | Use SSL (true) or do not use SSL (false)                                          |
 | couchbase.kvTimeout      | 5             | Timeout for KV operations                                                         |
 | couchbase.connectTimeout | 5             | Timeout for connections                                                           |
 | couchbase.queryTimeout   | 75            | Timeout for query operations                                                      |
 | couchbase.mode           | default       | Test mode either normal (default) or array append (array)                         |
 | couchbase.ttlSeconds     | 0             | Document TTL                                                                      |
 | couchbase.eventing       | timestamp.js  | Experimental future feature to create an Eventing function                        |
+
+## Manual mode
+Linux or macOS:
+```
+java -cp "$(pwd)/lib/*" site.ycsb.db.couchbase3.ClusterInit -p conf/db.properties
+```
+```
+bin/run.sh -M -w workloads/workloada
+```
+```
+java -cp "$(pwd)/lib/*" site.ycsb.db.couchbase3.ClusterClean -p conf/db.properties
+```
+Windows:
+```
+java -cp "lib\*" site.ycsb.db.couchbase3.ClusterInit -p conf\db.properties
+```
+```
+.\bin\run.bat -M -w .\workloads\workloada
+```
+```
+java -cp "lib\*" site.ycsb.db.couchbase3.ClusterClean -p conf\db.properties
+```
