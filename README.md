@@ -75,6 +75,18 @@ couchbase.database=testdb01
 ## Database Credentials
 To use the automation, be sure to use credentials that have permission to create and mange buckets and indexes. While this test suite should not interfere with other buckets in a cluster, it will consume cluster resources, so it is advisable to make sure that the test operations are the only operations being performed against the cluster. It is also a best practice to not use a production cluster that is being used for production operations.
 
+## Run script options
+| Option        | Description                                                                 |
+|---------------|-----------------------------------------------------------------------------|
+| -w WORKLOAD   | Path to workload definition file                                            |
+| -l            | Only load data (don't do run phase)                                         |
+| -r            | Only run test (don't do load phase - requires previously loaded data)       |
+| -R RECORDS    | Record count (number of records to load)                                    |
+| -O OPERATIONS | Operation count (number of transaction to perform in run phase)             |
+| -T TIME       | Stop run after this amount of time (in seconds)                             |
+| -M            | Manual mode - bucket and index (for workload E) have to be created manually |
+| -S            | Enable statistics collection during the test                                |
+
 ## Configuration Options
 Under normal circumstances you should only need to set the hostname, username, and password properties. If you are using a cluster that was just built for testing with default settings then technically you just need to set the hostname parameter. For Capella, you should at least set the hostname, username, password, project and database properties.
 
