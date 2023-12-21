@@ -25,10 +25,16 @@ package:
 		mvn clean install
 release: package download
 download:
-		gh release create -R "mminichino/$(PROJECT_NAME)" \
+		gh release create -R "couchbaselabs/$(PROJECT_NAME)" \
 		-t "Release $(PROJECT_VERSION)" \
 		-n "Release $(PROJECT_VERSION)" \
 		$(PROJECT_VERSION) \
 		./core/target/ycsb-couchbase.zip
 recall:
-		gh release delete -R "mminichino/$(PROJECT_NAME)" $(PROJECT_VERSION) --cleanup-tag -y
+		gh release delete -R "couchbaselabs/$(PROJECT_NAME)" $(PROJECT_VERSION) --cleanup-tag -y
+local:
+		gh release create -R "mminichino/$(PROJECT_NAME)" \
+		-t "Release $(PROJECT_VERSION)" \
+		-n "Release $(PROJECT_VERSION)" \
+		$(PROJECT_VERSION) \
+		./core/target/ycsb-couchbase.zip
