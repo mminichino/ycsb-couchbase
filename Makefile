@@ -7,6 +7,7 @@ commit:
 		git push
 branch:
 		git checkout -b "Version_$(shell cat VERSION)"
+		git push --set-upstream origin "Version_$(shell cat VERSION)"
 sync:
 		rsync -acv --exclude db/ --exclude .DS_Store core/src/main/java/site/ycsb/ ../YCSB/core/src/main/java/site/ycsb/
 		rsync -acv --exclude db/ --exclude .DS_Store core/src/test/java/site/ycsb/ ../YCSB/core/src/test/java/site/ycsb/
