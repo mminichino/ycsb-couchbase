@@ -63,6 +63,10 @@ public class CouchbaseTestSetup extends TestSetup {
     clusterSetup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterBucketType,
             clusterReplicaNum, clusterProject, clusterDatabase, indexCreate, indexField, clusterEventing);
 
+    if (clusterEventing != null) {
+      eventingSetup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterEventing);
+    }
+
     if (xdcrHost != null) {
       clusterSetup(xdcrHost, xdcrUser, xdcrPassword, xdcrSsl, xdcrBucket, xdcrBucketType, xdcrReplicaNum,
           xdcrProject, xdcrDatabase, indexCreate, indexField, xdcrEventing);
@@ -128,6 +132,25 @@ public class CouchbaseTestSetup extends TestSetup {
 
       sourceDb.disconnect();
       targetDb.disconnect();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static void eventingSetup(String host, String user, String password, boolean ssl, String bucket,
+                                    String resource) {
+    CouchbaseEventing.EventingBuilder eventingBuilder = new CouchbaseEventing.EventingBuilder();
+    CouchbaseConnect.CouchbaseBuilder dbBuilder = new CouchbaseConnect.CouchbaseBuilder();
+    CouchbaseConnect db;
+
+    try {
+      dbBuilder.connect(host, user, password)
+              .ssl(ssl)
+              .bucket(bucket);
+      db = dbBuilder.build();
+      CouchbaseEventing eventing = eventingBuilder.database(db).build();
+      System.err.printf("Deploying eventing function %s on cluster:[%s]\n", resource, host);
+      eventing.deployEventingFunction(resource, "eventing");
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
