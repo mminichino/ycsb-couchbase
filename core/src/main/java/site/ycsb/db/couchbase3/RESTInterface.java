@@ -1,64 +1,53 @@
 package site.ycsb.db.couchbase3;
 
-import com.couchbase.client.core.deps.com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import okhttp3.*;
 import okhttp3.logging.HttpLoggingInterceptor;
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Connect To REST Interface.
  */
 public class RESTInterface {
+  protected static final ch.qos.logback.classic.Logger LOGGER =
+          (ch.qos.logback.classic.Logger) LoggerFactory.getLogger("site.ycsb.db.couchbase3.RESTInterface");
   private final String hostname;
   private String username;
   private String password;
   private String token = null;
   private final Boolean useSsl;
   private final Integer port;
-  private String urlPrefix;
   private final OkHttpClient.Builder clientBuilder = new OkHttpClient.Builder();
   private OkHttpClient client;
   private String credential;
   private final boolean enableDebug;
-  public static final String DEFAULT_HTTP_PREFIX = "http://";
-  public static final String DEFAULT_HTTPS_PREFIX = "https://";
+  public int responseCode;
+  public byte[] responseBody;
+  public RequestBody requestBody;
   public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-
-  public RESTInterface(String hostname, String username, String password, Boolean useSsl, Integer port) {
-    this.hostname = hostname;
-    this.username = username;
-    this.password = password;
-    this.useSsl = useSsl;
-    this.port = port;
-    this.enableDebug = false;
-    this.init();
-  }
 
   public RESTInterface(String hostname, String username, String password, Boolean useSsl) {
     this.hostname = hostname;
     this.username = username;
     this.password = password;
     this.useSsl = useSsl;
+    this.port = useSsl ? 443 : 80;
     this.enableDebug = false;
-    if (useSsl) {
-      this.port = 443;
-    } else {
-      this.port = 80;
-    }
     this.init();
   }
 
@@ -67,41 +56,24 @@ public class RESTInterface {
     this.token = token;
     this.useSsl = useSsl;
     this.enableDebug = false;
-    if (useSsl) {
-      this.port = 443;
-    } else {
-      this.port = 80;
-    }
+    this.port = useSsl ? 443 : 80;
     this.init();
   }
 
   public void init() {
-    StringBuilder connectBuilder = new StringBuilder();
-    String urlProtocol;
-    if (useSsl) {
-      urlProtocol = DEFAULT_HTTPS_PREFIX;
-    } else {
-      urlProtocol = DEFAULT_HTTP_PREFIX;
-    }
-    connectBuilder.append(urlProtocol);
-    connectBuilder.append(hostname);
-    connectBuilder.append(":");
-    connectBuilder.append(port.toString());
-    urlPrefix = connectBuilder.toString();
-
     TrustManager[] trustAllCerts = new TrustManager[]{
         new X509TrustManager() {
           @Override
-          public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+          public void checkClientTrusted(X509Certificate[] chain, String authType) {
           }
 
           @Override
-          public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+          public void checkServerTrusted(X509Certificate[] chain, String authType) {
           }
 
           @Override
-          public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-            return new java.security.cert.X509Certificate[]{};
+          public X509Certificate[] getAcceptedIssuers() {
+            return new X509Certificate[]{};
           }
         }
     };
@@ -114,7 +86,7 @@ public class RESTInterface {
     }
 
     try {
-      sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+      sslContext.init(null, trustAllCerts, new SecureRandom());
     } catch (KeyManagementException e) {
       throw new RuntimeException(e);
     }
@@ -140,205 +112,147 @@ public class RESTInterface {
     client = clientBuilder.build();
   }
 
-  public JsonObject getJSON(String endpoint) throws RESTException {
-    String url = urlPrefix + endpoint;
-    Request request = new Request.Builder()
-        .url(url)
-        .header("Authorization", credential)
-        .build();
-
-    try (Response response = client.newCall(request).execute()) {
-      if (!response.isSuccessful()) {
-        throw new RESTException(response.code(), response.toString());
-      }
-      if (response.body() != null) {
-        String responseText = response.body().string();
-        Gson gson = new Gson();
-        return gson.fromJson(responseText, JsonObject.class);
+  private void execHttpCall(Request request) {
+    try {
+      try (Response response = client.newCall(request).execute()) {
+        responseCode = response.code();
+        responseBody = response.body() != null ? response.body().bytes() : new byte[0];
       }
     } catch (IOException e) {
-      throw new RESTException(e.getMessage());
+      throw new RuntimeException(e);
     }
-    return new JsonObject();
   }
 
-  public JsonArray getJSONArray(String endpoint) throws RESTException {
-    String url = urlPrefix + endpoint;
-    Request request = new Request.Builder()
-        .url(url)
-        .header("Authorization", credential)
-        .build();
-
-    try (Response response = client.newCall(request).execute()) {
-      if (!response.isSuccessful()) {
-        throw new RESTException(response.code(), response.toString());
-      }
-      if (response.body() != null) {
-        String responseText = response.body().string();
-        Gson gson = new Gson();
-        return gson.fromJson(responseText, JsonArray.class);
-      }
-    } catch (IOException e) {
-      throw new RESTException(e.getMessage());
-    }
-    return new JsonArray();
+  public RESTInterface get(HttpUrl url) {
+      execHttpCall(buildGetRequest(url));
+      return this;
   }
 
-  public HashMap<?, ?> getMap(String endpoint) throws RESTException {
-    String url = urlPrefix + endpoint;
-    Request request = new Request.Builder()
-        .url(url)
-        .header("Authorization", credential)
-        .build();
+  public RESTInterface post(String endpoint) {
+    execHttpCall(buildPostRequest(endpoint, requestBody));
+    return this;
+  }
 
-    try (Response response = client.newCall(request).execute()) {
-      if (!response.isSuccessful()) {
-        throw new RESTException(response.code(), response.toString());
-      }
-      if (response.body() != null) {
-        String responseText = response.body().string();
-        return new ObjectMapper().readValue(responseText, HashMap.class);
-      }
-    } catch (IOException e) {
-      throw new RESTException(e.getMessage());
-    }
-    return new HashMap<>();
+  public RESTInterface delete(String endpoint) {
+    execHttpCall(buildDeleteRequest(endpoint));
+    return this;
+  }
+
+  public JsonObject json() {
+    Gson gson = new Gson();
+    return gson.fromJson(new String(responseBody), JsonObject.class);
+  }
+
+  public RESTInterface jsonBody(JsonObject json) {
+    requestBody = RequestBody.create(json.toString(), JSON);
+    return this;
+  }
+
+  public int code() {
+    return responseCode;
   }
 
   public List<JsonElement> getCapella(String endpoint) {
-    JsonObject response;
-    List<JsonElement> data = new ArrayList<>();
+    HttpUrl url = buildUrl(endpoint);
+    JsonObject response = get(url).json();
+    return new ArrayList<>(response.get("data").getAsJsonArray().asList());
+  }
+
+  public HttpUrl buildUrl(String endpoint) {
+    HttpUrl.Builder builder = new HttpUrl.Builder();
+    return builder.scheme(useSsl ? "https" : "http")
+            .host(hostname)
+            .port(port)
+            .addPathSegment(endpoint)
+            .build();
+  }
+
+  public Request buildGetRequest(HttpUrl url) {
+    return new Request.Builder()
+            .url(url)
+            .header("Authorization", credential)
+            .build();
+  }
+
+  public Request buildPostRequest(String endpoint, RequestBody body) {
+    HttpUrl url = buildUrl(endpoint);
+    return new Request.Builder()
+            .url(url)
+            .post(body)
+            .header("Authorization", credential)
+            .build();
+  }
+
+  public Request buildDeleteRequest(String endpoint) {
+    HttpUrl url = buildUrl(endpoint);
+    return new Request.Builder()
+            .url(url)
+            .delete()
+            .header("Authorization", credential)
+            .build();
+  }
+
+  public HttpUrl buildPageUrl(String endpoint, int page, int perPage) {
+    HttpUrl.Builder builder = new HttpUrl.Builder();
+    return builder.scheme(useSsl ? "https" : "http")
+            .host(hostname)
+            .port(port)
+            .addPathSegment(endpoint)
+            .addQueryParameter("page", String.valueOf(page))
+            .addQueryParameter("perPage", String.valueOf(perPage))
+            .build();
+  }
+
+  public Request buildPageRequest(String endpoint, int page, int perPage) {
+    HttpUrl url = buildPageUrl(endpoint, page, perPage);
+    return new Request.Builder()
+            .url(url)
+            .header("Authorization", credential)
+            .build();
+  }
+
+  public List<JsonElement> getCapellaList(String endpoint) {
+    HttpUrl url = buildPageUrl(endpoint, 1, 10);
+    JsonObject cursor = get(url).json();
+
+    int totalItems = cursor.get("cursor").getAsJsonObject().get("pages").getAsJsonObject().get("totalItems").getAsInt();
+    int pages = (int) Math.ceil(totalItems / 10.0);
+    List<JsonElement> data = new ArrayList<>(cursor.get("data").getAsJsonArray().asList());
+
+    CountDownLatch countDownLatch = new CountDownLatch(pages);
+    for (int i=2; i <= pages; i++) {
+      Request request = buildPageRequest(endpoint, i, 10);
+      client.newCall(request).enqueue(new Callback() {
+
+        @Override
+        public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
+          if (!response.isSuccessful()) {
+            LOGGER.error("Error: " + response.code() + ": " + response);
+          } else if (response.body() != null) {
+            String responseText = response.body().string();
+            Gson gson = new Gson();
+            JsonObject part =  gson.fromJson(responseText, JsonObject.class);
+            data.addAll(part.get("data").getAsJsonArray().asList());
+          }
+          countDownLatch.countDown();
+        }
+
+        @Override
+        public void onFailure(@NotNull Call call, @NotNull IOException e) {
+          LOGGER.error(e.getMessage(), e);
+          countDownLatch.countDown();
+        }
+      });
+    }
+    countDownLatch.countDown();
+
     try {
-      response = getJSON(endpoint);
-    } catch (RESTException e) {
+      countDownLatch.await();
+      client.dispatcher().executorService().shutdown();
+    } catch (InterruptedException e) {
       throw new RuntimeException(e);
     }
-    if (response.has("cursor")) {
-      if (response.getAsJsonObject("cursor").has("pages")) {
-        if (response.getAsJsonObject("cursor")
-            .getAsJsonObject("pages")
-            .has("next")) {
-          String nextPage = response.getAsJsonObject("cursor")
-              .getAsJsonObject("pages").get("next").getAsString();
-          String perPage = response.getAsJsonObject("cursor")
-              .getAsJsonObject("pages").get("perPage").getAsString();
-          if (Integer.parseInt(nextPage) > 0) {
-            URL url;
-            try {
-              url = new URL(urlPrefix + endpoint);
-            } catch (MalformedURLException e) {
-              throw new RuntimeException(e);
-            }
-            String newEndpoint = url.getPath() + "?page=" + nextPage + "&perPage=" + perPage;
-            List<JsonElement> nextData = getCapella(newEndpoint);
-            data.addAll(nextData);
-          }
-        }
-      }
-    }
-    data.addAll(response.get("data").getAsJsonArray().asList());
+
     return data;
-  }
-
-  public String postJSON(String endpoint, JsonObject json) throws RESTException {
-    String url = urlPrefix + endpoint;
-    RequestBody body = RequestBody.create(json.toString(), JSON);
-    Request request = new Request.Builder()
-        .url(url)
-        .post(body)
-        .header("Authorization", credential)
-        .build();
-
-    try (Response response = client.newCall(request).execute()) {
-      if (!response.isSuccessful()) {
-        throw new RESTException(response.code(), response.toString());
-      }
-      return response.body() != null ? response.body().string() : null;
-    } catch (IOException e) {
-      throw new RESTException(e.getMessage());
-    }
-  }
-
-  public JsonArray postJSONArray(String endpoint, JsonArray json) throws RESTException {
-    return postJSONString(endpoint, json.toString());
-  }
-
-  public JsonArray postJSONString(String endpoint, String json) throws RESTException {
-    String url = urlPrefix + endpoint;
-    RequestBody body = RequestBody.create(json, JSON);
-    Request request = new Request.Builder()
-        .url(url)
-        .post(body)
-        .header("Authorization", credential)
-        .build();
-
-    try (Response response = client.newCall(request).execute()) {
-      if (!response.isSuccessful()) {
-        throw new RESTException(response.code(), response.toString());
-      }
-      Gson gson = new Gson();
-      return response.body() != null ? gson.fromJson(response.body().string(), JsonArray.class) : new JsonArray();
-    } catch (IOException e) {
-      throw new RESTException(e.getMessage());
-    }
-  }
-
-  public void postEndpoint(String endpoint) throws RESTException {
-    String url = urlPrefix + endpoint;
-    RequestBody body = RequestBody.create(new JsonObject().toString(), JSON);
-    Request request = new Request.Builder()
-        .url(url)
-        .post(body)
-        .header("Authorization", credential)
-        .build();
-
-    try (Response response = client.newCall(request).execute()) {
-      if (!response.isSuccessful()) {
-        throw new RESTException(response.code(), response.toString());
-      }
-    } catch (IOException e) {
-      throw new RESTException(e.getMessage());
-    }
-  }
-
-  public void postParameters(String endpoint, Map<String, String> params) throws RESTException {
-    String url = urlPrefix + endpoint;
-    RequestBody body = RequestBody.create(new JsonObject().toString(), JSON);
-
-    HttpUrl.Builder httpBuilder = Objects.requireNonNull(HttpUrl.parse(url)).newBuilder();
-    for(Map.Entry<String, String> param : params.entrySet()) {
-      httpBuilder.addQueryParameter(param.getKey(), param.getValue());
-    }
-
-    Request request = new Request.Builder()
-        .url(httpBuilder.build())
-        .post(body)
-        .header("Authorization", credential)
-        .build();
-
-    try (Response response = client.newCall(request).execute()) {
-      if (!response.isSuccessful()) {
-        throw new RESTException(response.code(), response.toString());
-      }
-    } catch (IOException e) {
-      throw new RESTException(e.getMessage());
-    }
-  }
-
-  public void deleteEndpoint(String endpoint) throws RESTException {
-    String url = urlPrefix + endpoint;
-    Request request = new Request.Builder()
-        .url(url)
-        .delete()
-        .header("Authorization", credential)
-        .build();
-
-    try (Response response = client.newCall(request).execute()) {
-      if (!response.isSuccessful()) {
-        throw new RESTException(response.code(), response.toString());
-      }
-    } catch (IOException e) {
-      throw new RESTException(e.getMessage());
-    }
   }
 }

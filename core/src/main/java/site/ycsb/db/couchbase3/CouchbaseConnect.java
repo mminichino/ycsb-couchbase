@@ -19,6 +19,7 @@ import com.couchbase.client.java.codec.RawJsonTranscoder;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.core.env.SecurityConfig;
 import com.couchbase.client.core.deps.io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import com.couchbase.client.java.http.CouchbaseHttpClient;
 import com.couchbase.client.java.http.HttpPath;
 import com.couchbase.client.java.http.HttpResponse;
 import com.couchbase.client.java.http.HttpTarget;
@@ -174,7 +175,7 @@ public final class CouchbaseConnect {
       return this;
     }
 
-    public CouchbaseConnect build() throws CouchbaseConnectException {
+    public CouchbaseConnect build() {
       return new CouchbaseConnect(this);
     }
   }
@@ -240,8 +241,10 @@ public final class CouchbaseConnect {
           cluster.waitUntilReady(Duration.ofSeconds(15));
           bucketMgr = cluster.buckets();
           try {
-            bucketMgr.getBucket(bucketName);
-            bucket = cluster.bucket(bucketName);
+            if (bucketName != null) {
+              bucketMgr.getBucket(bucketName);
+              bucket = cluster.bucket(bucketName);
+            }
           } catch (BucketNotFoundException ignored) { }
           getClusterInfo();
         }
@@ -299,6 +302,10 @@ public final class CouchbaseConnect {
 
   public Cluster getCluster() {
     return cluster;
+  }
+
+  public CouchbaseHttpClient getHttpClient() {
+    return cluster.httpClient();
   }
 
   private void logError(Exception error, String connectString) {

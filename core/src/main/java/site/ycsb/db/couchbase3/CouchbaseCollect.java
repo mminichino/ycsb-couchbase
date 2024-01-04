@@ -1,5 +1,7 @@
 package site.ycsb.db.couchbase3;
 
+import com.couchbase.client.java.http.*;
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -8,6 +10,8 @@ import site.ycsb.measurements.RemoteStatistics;
 
 import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -28,6 +32,7 @@ public class CouchbaseCollect extends RemoteStatistics {
       (ch.qos.logback.classic.Logger)LoggerFactory.getLogger("site.ycsb.db.couchbase3.statistics");
   private static final String PROPERTY_FILE = "db.properties";
   private static final String PROPERTY_TEST = "test.properties";
+  private static final String STATISTICS_CONFIG_FILE = "statistics.json";
   public static final String COUCHBASE_HOST = "couchbase.hostname";
   public static final String COUCHBASE_USER = "couchbase.username";
   public static final String COUCHBASE_PASSWORD = "couchbase.password";
@@ -42,12 +47,20 @@ public class CouchbaseCollect extends RemoteStatistics {
   private static String password;
   private static String bucketName;
   private static boolean sslMode;
+  private static JsonArray metricList;
+
+  /**
+   * Metric Mode.
+   */
+  public enum MetricMode {
+    SYSTEM, BUCKET, XDCR, DISK
+  }
 
   /**
    * Metric Type.
    */
-  public enum MetricMode {
-    SYSTEM, BUCKET, XDCR, DISK
+  public enum MetricType {
+    GAUGE, COUNTER
   }
 
   @Override
@@ -72,20 +85,22 @@ public class CouchbaseCollect extends RemoteStatistics {
     password = properties.getProperty(COUCHBASE_PASSWORD, CouchbaseConnect.DEFAULT_PASSWORD);
     bucketName = properties.getProperty(COUCHBASE_BUCKET, "ycsb");
     sslMode = properties.getProperty(COUCHBASE_SSL_MODE, "false").equals("true");
+
+    URL configFile = classloader.getResource(STATISTICS_CONFIG_FILE);
+    try {
+      String configJson = new String(Files.readAllBytes(Paths.get(Objects.requireNonNull(configFile).getPath())));
+      Gson gson = new Gson();
+      metricList = gson.fromJson(configJson, JsonArray.class);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
   public void startCollectionThread() {
-    int port;
     DecimalFormat formatter = new DecimalFormat("#,###");
-
-    if (sslMode) {
-      port = 18091;
-    } else {
-      port = 8091;
-    }
-
-    RESTInterface rest = new RESTInterface(hostname, username, password, sslMode, port);
+    CouchbaseConnect.CouchbaseBuilder dbBuilder = new CouchbaseConnect.CouchbaseBuilder();
+    CouchbaseHttpClient client = dbBuilder.connect(hostname, username, password).ssl(sslMode).build().getHttpClient();
 
     STATISTICS.info(String.format("==== Begin Cluster Collection %s ====\n", timeStampFormat.format(new Date())));
 
@@ -93,6 +108,15 @@ public class CouchbaseCollect extends RemoteStatistics {
       StringBuilder output = new StringBuilder();
       String timeStamp = timeStampFormat.format(new Date());
       output.append(String.format("%s ", timeStamp));
+      JsonArray metricSet = new JsonArray();
+
+      for (JsonElement metric : metricList) {
+        String name = metric.getAsJsonObject().get("metric").getAsString();
+        MetricMode mode = MetricMode.valueOf(metric.getAsJsonObject().get("mode").getAsString());
+        MetricType type = MetricType.valueOf(metric.getAsJsonObject().get("type").getAsString());
+        metricSet.add(addMetric(name, mode, type));
+      }
+//      LOGGER.info(metricSet.toString());
 
       JsonArray metrics = new JsonArray();
       addMetric("sys_cpu_host_utilization_rate", MetricFunction.MAX, metrics, MetricMode.SYSTEM, bucketName);
@@ -119,7 +143,19 @@ public class CouchbaseCollect extends RemoteStatistics {
 
       try {
         String endpoint = "/pools/default/stats/range";
-        JsonArray data = rest.postJSONArray(endpoint, metrics);
+        HttpResponse response = client.post(
+                HttpTarget.manager(),
+                HttpPath.of(endpoint),
+                HttpPostOptions.httpPostOptions()
+                        .body(HttpBody.json(metrics.toString())));
+        Gson gson = new Gson();
+        JsonArray data = gson.fromJson(response.contentAsString(), JsonArray.class);
+
+        int counter = 0;
+        for (JsonElement metric : metricList) {
+          MetricValue value = new MetricValue(data.getAsJsonArray().get(counter).getAsJsonObject());
+          boolean decimal = metric.getAsJsonObject().get("decimal").getAsBoolean();
+        }
 
         double cpuUtil = getMetricAvgDouble(data.getAsJsonArray().get(0).getAsJsonObject());
         long memTotal = getMetricMaxLong(data.getAsJsonArray().get(1).getAsJsonObject());
@@ -182,26 +218,7 @@ public class CouchbaseCollect extends RemoteStatistics {
 
   private static void addMetric(String name, MetricFunction func, JsonArray metrics, MetricMode mode, String bucket) {
     JsonObject block = new JsonObject();
-    JsonArray metric = new JsonArray();
-    JsonObject definition = new JsonObject();
-    definition.addProperty("label", "name");
-    definition.addProperty("value", name);
-    metric.add(definition);
-    if (mode == MetricMode.BUCKET || mode == MetricMode.DISK) {
-      JsonObject bucketDefinition = new JsonObject();
-      bucketDefinition.addProperty("label", "bucket");
-      bucketDefinition.addProperty("value", bucket);
-      metric.add(bucketDefinition);
-    } else if (mode == MetricMode.XDCR) {
-      JsonObject source = new JsonObject();
-      source.addProperty("label", "sourceBucketName");
-      source.addProperty("value", bucket);
-      metric.add(source);
-      JsonObject pipeLine = new JsonObject();
-      pipeLine.addProperty("label", "pipelineType");
-      pipeLine.addProperty("value", "Main");
-      metric.add(pipeLine);
-    }
+    JsonArray metric = getMetricStruct(name, bucket, mode);
     JsonArray applyFunctions = new JsonArray();
     applyFunctions.add(func.getValue());
     block.add("metric", metric);
@@ -215,6 +232,59 @@ public class CouchbaseCollect extends RemoteStatistics {
     block.addProperty("step", 15);
     block.addProperty("start", -60);
     metrics.add(block);
+  }
+
+  private static JsonObject addMetric(String name, MetricMode mode, MetricType type) {
+    JsonObject block = new JsonObject();
+    JsonArray metric = getMetricStruct(name, bucketName, mode);
+
+    JsonArray applyFunctions = new JsonArray();
+    if (type == MetricType.COUNTER) {
+      applyFunctions.add("max");
+    } else {
+      applyFunctions.add("avg");
+    }
+
+    block.add("metric", metric);
+    block.add("applyFunctions", applyFunctions);
+
+    if (type == MetricType.COUNTER) {
+      block.addProperty("nodesAggregation", "sum");
+    } else {
+      block.addProperty("nodesAggregation", "avg");
+    }
+
+    block.addProperty("alignTimestamps", true);
+    block.addProperty("step", 1000);
+    block.addProperty("start", -2000);
+
+    return block;
+  }
+
+  private static JsonArray getMetricStruct(String name, String bucketName, MetricMode mode) {
+    JsonArray metric = new JsonArray();
+
+    JsonObject definition = new JsonObject();
+    definition.addProperty("label", "name");
+    definition.addProperty("value", name);
+    metric.add(definition);
+
+    if (mode == MetricMode.BUCKET) {
+      JsonObject bucketDefinition = new JsonObject();
+      bucketDefinition.addProperty("label", "bucket");
+      bucketDefinition.addProperty("value", bucketName);
+      metric.add(bucketDefinition);
+    } else if (mode == MetricMode.XDCR) {
+      JsonObject source = new JsonObject();
+      source.addProperty("label", "sourceBucketName");
+      source.addProperty("value", bucketName);
+      metric.add(source);
+      JsonObject pipeLine = new JsonObject();
+      pipeLine.addProperty("label", "pipelineType");
+      pipeLine.addProperty("value", "Main");
+      metric.add(pipeLine);
+    }
+    return metric;
   }
 
   private double getMetricAvgDouble(JsonObject block) {

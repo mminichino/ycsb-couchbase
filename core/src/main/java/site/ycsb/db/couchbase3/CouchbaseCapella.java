@@ -11,6 +11,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
+import java.util.stream.Stream;
 
 /**
  * Couchbase Capella Utility.
@@ -58,18 +59,20 @@ public class CouchbaseCapella {
     return result.get(0).getAsJsonObject().get("id").getAsString();
   }
 
+  public String extractId(String name, List<JsonElement> list) {
+    Stream<JsonElement> stream = list.parallelStream();
+    return stream.filter(e -> e.getAsJsonObject().get("name").getAsString().equals(name))
+            .findFirst()
+            .map(e -> e.getAsJsonObject().get("id").getAsString())
+            .orElse(null);
+  }
+
   public String getProjectId(String project) {
     String endpoint = "/v4/organizations/" +
         organizationId +
         "/projects";
 
-    List<JsonElement> result = capella.getCapella(endpoint);
-    for (JsonElement entry : result) {
-      if (Objects.equals(entry.getAsJsonObject().get("name").getAsString(), project)) {
-        return entry.getAsJsonObject().get("id").getAsString();
-      }
-    }
-    return null;
+    return extractId(project, capella.getCapellaList(endpoint));
   }
 
   public String getDatabaseId(String database) {
@@ -79,13 +82,7 @@ public class CouchbaseCapella {
         projectId +
         "/clusters";
 
-    List<JsonElement> result = capella.getCapella(endpoint);
-    for (JsonElement entry : result) {
-      if (Objects.equals(entry.getAsJsonObject().get("name").getAsString(), database)) {
-        return entry.getAsJsonObject().get("id").getAsString();
-      }
-    }
-    return null;
+    return extractId(database, capella.getCapellaList(endpoint));
   }
 
   public String getBucketId(String bucket) {
@@ -97,31 +94,11 @@ public class CouchbaseCapella {
         databaseId +
         "/buckets";
 
-    List<JsonElement> result = capella.getCapella(endpoint);
-    for (JsonElement entry : result) {
-      if (Objects.equals(entry.getAsJsonObject().get("name").getAsString(), bucket)) {
-        return entry.getAsJsonObject().get("id").getAsString();
-      }
-    }
-    return null;
+    return extractId(bucket, capella.getCapella(endpoint));
   }
 
   public Boolean isBucket(String bucket) {
-    String endpoint = "/v4/organizations/" +
-        organizationId +
-        "/projects/" +
-        projectId +
-        "/clusters/" +
-        databaseId +
-        "/buckets";
-
-    List<JsonElement> result = capella.getCapella(endpoint);
-    for (JsonElement entry : result) {
-      if (Objects.equals(entry.getAsJsonObject().get("name").getAsString(), bucket)) {
-        return true;
-      }
-    }
-    return false;
+    return getBucketId(bucket) != null;
   }
 
   public void createBucket(String bucket, long quota, int replicas, StorageBackend type) {
@@ -148,10 +125,10 @@ public class CouchbaseCapella {
     parameters.addProperty("flush", false);
     parameters.addProperty("timeToLiveInSeconds", 0);
 
-    try {
-      capella.postJSON(endpoint, parameters);
-    } catch (RESTException e) {
-      throw new RuntimeException(e);
+    int result = capella.jsonBody(parameters).post(endpoint).code();
+
+    if (result != 201) {
+      throw new RuntimeException("Bucket create failed with code " + result);
     }
   }
 
@@ -171,10 +148,10 @@ public class CouchbaseCapella {
         "/buckets/" +
         bucketId;
 
-    try {
-      capella.deleteEndpoint(endpoint);
-    } catch (RESTException e) {
-      throw new RuntimeException(e);
+    int result = capella.delete(endpoint).code();
+
+    if (result != 204) {
+      throw new RuntimeException("Bucket drop failed with code " + result);
     }
   }
 }

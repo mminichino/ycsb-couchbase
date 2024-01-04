@@ -1,0 +1,138 @@
+[
+  {
+    "metric": "sys_cpu_host_utilization_rate",
+    "label": "CPU",
+    "type": "GAUGE",
+    "mode": "SYSTEM",
+    "decimal": true,
+    "transform": "none"
+  },
+  {
+    "metric": "sys_mem_total",
+    "label": "Mem",
+    "type": "GAUGE",
+    "mode": "SYSTEM",
+    "decimal": false,
+    "transform": "to_gib"
+  },
+  {
+    "metric": "sys_mem_free",
+    "label": "Free",
+    "type": "GAUGE",
+    "mode": "SYSTEM",
+    "decimal": false,
+    "transform": "to_gib"
+  },
+  {
+    "metric": "n1ql_requests",
+    "label": "sqlReq",
+    "type": "COUNTER",
+    "mode": "SYSTEM",
+    "decimal": false,
+    "transform": "none"
+  },
+  {
+    "metric": "n1ql_active_requests",
+    "label": "sqlActReq",
+    "type": "GAUGE",
+    "mode": "SYSTEM",
+    "decimal": false,
+    "transform": "none"
+  },
+  {
+    "metric": "n1ql_load",
+    "label": "sqlActReq",
+    "type": "GAUGE",
+    "mode": "SYSTEM",
+    "decimal": true,
+    "transform": "none"
+  },
+  {
+    "metric": "n1ql_request_time",
+    "label": "sqlReqTime",
+    "type": "COUNTER",
+    "mode": "SYSTEM",
+    "decimal": false,
+    "transform": "from_ns"
+  },
+  {
+    "metric": "n1ql_service_time",
+    "label": "sqlSvcTime",
+    "type": "COUNTER",
+    "mode": "SYSTEM",
+    "decimal": false,
+    "transform": "from_ns"
+  },
+  {
+    "metric": "kv_ep_num_non_resident",
+    "label": "Resident",
+    "type": "GAUGE",
+    "mode": "BUCKET",
+    "decimal": false,
+    "transform": "inverse"
+  },
+  {
+    "metric": "kv_ep_queue_size",
+    "label": "Queue",
+    "type": "GAUGE",
+    "mode": "BUCKET",
+    "decimal": false,
+    "transform": "none"
+  },
+  {
+    "metric": "kv_ep_flusher_todo",
+    "label": "Todo",
+    "type": "GAUGE",
+    "mode": "BUCKET",
+    "decimal": false,
+    "transform": "none"
+  },
+  {
+    "metric": "kv_ep_io_total_read_bytes_bytes",
+    "label": "Read",
+    "type": "COUNTER",
+    "mode": "BUCKET",
+    "decimal": false,
+    "transform": "none"
+  },
+  {
+    "metric": "kv_ep_io_total_write_bytes_bytes",
+    "label": "Write",
+    "type": "COUNTER",
+    "mode": "BUCKET",
+    "decimal": false,
+    "transform": "none"
+  },
+  {
+    "metric": "kv_curr_items",
+    "label": "Items",
+    "type": "GAUGE",
+    "mode": "BUCKET",
+    "decimal": false,
+    "transform": "comma_delim"
+  },
+  {
+    "metric": "xdcr_resp_wait_time_seconds",
+    "label": "XDCRResp",
+    "type": "GAUGE",
+    "mode": "XDCR",
+    "decimal": true,
+    "transform": "to_ms"
+  },
+  {
+    "metric": "xdcr_wtavg_docs_latency_seconds",
+    "label": "XDCRLat",
+    "type": "GAUGE",
+    "mode": "XDCR",
+    "decimal": true,
+    "transform": "to_ms"
+  },
+  {
+    "metric": "xdcr_data_replicated_bytes",
+    "label": "XDCRData",
+    "type": "COUNTER",
+    "mode": "XDCR",
+    "decimal": false,
+    "transform": "to_gib"
+  }
+]
