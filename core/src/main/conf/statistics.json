@@ -4,8 +4,8 @@
     "label": "CPU",
     "type": "GAUGE",
     "mode": "SYSTEM",
-    "decimal": true,
-    "transform": "none"
+    "decimal": false,
+    "transform": "percent"
   },
   {
     "metric": "sys_mem_total",
@@ -41,11 +41,11 @@
   },
   {
     "metric": "n1ql_load",
-    "label": "sqlActReq",
+    "label": "sqlLoad",
     "type": "GAUGE",
     "mode": "SYSTEM",
-    "decimal": true,
-    "transform": "none"
+    "decimal": false,
+    "transform": "percent"
   },
   {
     "metric": "n1ql_request_time",
@@ -93,7 +93,7 @@
     "type": "COUNTER",
     "mode": "BUCKET",
     "decimal": false,
-    "transform": "none"
+    "transform": "to_gib"
   },
   {
     "metric": "kv_ep_io_total_write_bytes_bytes",
@@ -101,12 +101,12 @@
     "type": "COUNTER",
     "mode": "BUCKET",
     "decimal": false,
-    "transform": "none"
+    "transform": "to_gib"
   },
   {
     "metric": "kv_curr_items",
     "label": "Items",
-    "type": "GAUGE",
+    "type": "TOTAL",
     "mode": "BUCKET",
     "decimal": false,
     "transform": "comma_delim"
@@ -116,7 +116,7 @@
     "label": "XDCRResp",
     "type": "GAUGE",
     "mode": "XDCR",
-    "decimal": true,
+    "decimal": false,
     "transform": "to_ms"
   },
   {
@@ -124,7 +124,7 @@
     "label": "XDCRLat",
     "type": "GAUGE",
     "mode": "XDCR",
-    "decimal": true,
+    "decimal": false,
     "transform": "to_ms"
   },
   {
