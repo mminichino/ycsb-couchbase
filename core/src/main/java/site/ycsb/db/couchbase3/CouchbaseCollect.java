@@ -139,8 +139,9 @@ public class CouchbaseCollect extends RemoteStatistics {
       STATISTICS.info(String.format("%s\n", line));
       line.delete(0, line.length());
     };
+
     System.err.println("Starting remote statistics thread...");
-    apiHandle = scheduler.scheduleWithFixedDelay(callApi, 10, 10, SECONDS);
+    apiHandle = scheduler.scheduleWithFixedDelay(callApi, 1, 10, SECONDS);
   }
 
   private static JsonObject addMetric(String name, MetricMode mode, MetricType type) {
@@ -164,8 +165,8 @@ public class CouchbaseCollect extends RemoteStatistics {
     }
 
     block.addProperty("alignTimestamps", true);
-    block.addProperty("step", 1000);
-    block.addProperty("start", -2000);
+    block.addProperty("step", 10);
+    block.addProperty("start", -20);
 
     return block;
   }
@@ -205,8 +206,8 @@ public class CouchbaseCollect extends RemoteStatistics {
       JsonArray values = data.get(0).getAsJsonObject().get("values").getAsJsonArray();
       double first_val = Double.parseDouble(values.get(0).getAsJsonArray().get(1).getAsString());
       double second_val = Double.parseDouble(values.get(1).getAsJsonArray().get(1).getAsString());
-      first = Double.isNaN(first_val) ? 0 : Double.isInfinite(first_val) ? Double.MAX_VALUE : first_val;
-      second = Double.isNaN(second_val) ? 0 : Double.isInfinite(second_val) ? Double.MAX_VALUE : second_val;
+      first = Double.isNaN(first_val) ? 0 : Double.isInfinite(first_val) ? Double.MAX_VALUE : Math.abs(first_val);
+      second = Double.isNaN(second_val) ? 0 : Double.isInfinite(second_val) ? Double.MAX_VALUE : Math.abs(second_val);
     }
 
     return generate(first, second, type, decimal, transform, label);

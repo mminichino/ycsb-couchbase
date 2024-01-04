@@ -90,7 +90,7 @@
   {
     "metric": "kv_ep_io_total_read_bytes_bytes",
     "label": "Read",
-    "type": "COUNTER",
+    "type": "GAUGE",
     "mode": "BUCKET",
     "decimal": false,
     "transform": "to_gib"
@@ -98,7 +98,7 @@
   {
     "metric": "kv_ep_io_total_write_bytes_bytes",
     "label": "Write",
-    "type": "COUNTER",
+    "type": "GAUGE",
     "mode": "BUCKET",
     "decimal": false,
     "transform": "to_gib"

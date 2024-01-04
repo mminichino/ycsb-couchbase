@@ -1,6 +1,5 @@
 package site.ycsb.db.couchbase3;
 
-import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.http.*;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -15,6 +14,7 @@ import java.util.Map;
 public final class CouchbaseXDCR {
   private final CouchbaseConnect source;
   private final CouchbaseConnect target;
+  private final CouchbaseHttpClient client;
 
   /**
    * Class Builder.
@@ -41,6 +41,7 @@ public final class CouchbaseXDCR {
   private CouchbaseXDCR(CouchbaseXDCR.XDCRBuilder builder) {
     this.source = builder.sourceDb;
     this.target = builder.targetDb;
+    this.client = this.source.getHttpClient();
   }
 
   public void createReplication() {
@@ -72,8 +73,7 @@ public final class CouchbaseXDCR {
       parameters.put("network_type", "external");
     }
 
-    Cluster cluster = source.getCluster();
-    HttpResponse response = cluster.httpClient().post(
+    HttpResponse response = client.post(
             HttpTarget.manager(),
             HttpPath.of("/pools/default/remoteClusters"),
             HttpPostOptions.httpPostOptions()
@@ -86,8 +86,7 @@ public final class CouchbaseXDCR {
   }
 
   public String getXDCRReference(String hostname) {
-    Cluster cluster = source.getCluster();
-    HttpResponse response = cluster.httpClient().get(
+    HttpResponse response = client.get(
             HttpTarget.manager(),
             HttpPath.of("/pools/default/remoteClusters"));
 
@@ -117,8 +116,7 @@ public final class CouchbaseXDCR {
 
     String endpoint = "/pools/default/remoteClusters/" + hostname;
 
-    Cluster cluster = source.getCluster();
-    HttpResponse response = cluster.httpClient().delete(
+    HttpResponse response = client.delete(
             HttpTarget.manager(),
             HttpPath.of(endpoint));
 
@@ -143,8 +141,7 @@ public final class CouchbaseXDCR {
     parameters.put("toCluster", remote);
     parameters.put("toBucket", targetBucket);
 
-    Cluster cluster = source.getCluster();
-    HttpResponse response = cluster.httpClient().post(
+    HttpResponse response = client.post(
             HttpTarget.manager(),
             HttpPath.of("/controller/createReplication"),
             HttpPostOptions.httpPostOptions()
@@ -173,8 +170,7 @@ public final class CouchbaseXDCR {
 
     String endpoint = "/controller/cancelXDCR/" + uuid + "%2F" + sourceBucket + "%2F" + targetBucket;
 
-    Cluster cluster = source.getCluster();
-    HttpResponse response = cluster.httpClient().delete(
+    HttpResponse response = client.delete(
             HttpTarget.manager(),
             HttpPath.of(endpoint));
 
@@ -193,8 +189,7 @@ public final class CouchbaseXDCR {
 
     String endpoint = "/settings/replications/" + uuid + "%2F" + sourceBucket + "%2F" + targetBucket;
 
-    Cluster cluster = source.getCluster();
-    HttpResponse response = cluster.httpClient().get(
+    HttpResponse response = client.get(
             HttpTarget.manager(),
             HttpPath.of(endpoint));
 

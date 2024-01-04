@@ -1,6 +1,5 @@
 package site.ycsb.db.couchbase3;
 
-import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.http.*;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -19,6 +18,7 @@ import java.nio.file.Paths;
  */
 public final class CouchbaseEventing {
   private final CouchbaseConnect db;
+  private final CouchbaseHttpClient client;
 
   /**
    * Class Builder.
@@ -38,13 +38,12 @@ public final class CouchbaseEventing {
 
   private CouchbaseEventing(CouchbaseEventing.EventingBuilder builder) {
     this.db = builder.targetDb;
+    this.client = this.db.getHttpClient();
   }
 
   public Boolean isEventingFunction(String name) {
     String endpoint = "/api/v1/functions/" + name;
-
-    Cluster cluster = db.getCluster();
-    HttpResponse response = cluster.httpClient().get(
+    HttpResponse response = client.get(
             HttpTarget.eventing(),
             HttpPath.of(endpoint));
 
@@ -53,9 +52,7 @@ public final class CouchbaseEventing {
 
   public Boolean isEventingFunctionDeployed(String name) {
     String endpoint = "/api/v1/functions/" + name;
-
-    Cluster cluster = db.getCluster();
-    HttpResponse response = cluster.httpClient().get(
+    HttpResponse response = client.get(
             HttpTarget.eventing(),
             HttpPath.of(endpoint));
 
@@ -95,8 +92,7 @@ public final class CouchbaseEventing {
 
     if (!isEventingFunction(name)) {
       String endpoint = "/api/v1/functions/" + name;
-      Cluster cluster = db.getCluster();
-      HttpResponse response = cluster.httpClient().post(
+      HttpResponse response = client.post(
               HttpTarget.eventing(),
               HttpPath.of(endpoint),
               HttpPostOptions.httpPostOptions()
@@ -110,8 +106,7 @@ public final class CouchbaseEventing {
 
     if (!isEventingFunctionDeployed(name)) {
       String endpoint = "/api/v1/functions/" + name + "/deploy";
-      Cluster cluster = db.getCluster();
-      HttpResponse response = cluster.httpClient().post(
+      HttpResponse response = client.post(
               HttpTarget.eventing(),
               HttpPath.of(endpoint));
 
@@ -128,8 +123,7 @@ public final class CouchbaseEventing {
 
     if (isEventingFunctionDeployed(name)) {
       String endpoint = "/api/v1/functions/" + name + "/undeploy";
-      Cluster cluster = db.getCluster();
-      HttpResponse response = cluster.httpClient().post(
+      HttpResponse response = client.post(
               HttpTarget.eventing(),
               HttpPath.of(endpoint));
 
@@ -141,8 +135,7 @@ public final class CouchbaseEventing {
 
     if (isEventingFunction(name)) {
       String endpoint = "/api/v1/functions/" + name;
-      Cluster cluster = db.getCluster();
-      HttpResponse response = cluster.httpClient().delete(
+      HttpResponse response = client.delete(
               HttpTarget.eventing(),
               HttpPath.of(endpoint));
 
@@ -165,6 +158,10 @@ public final class CouchbaseEventing {
     parameters.addProperty("appname", name);
     JsonObject settingsConfig = getSettingsConfig();
     parameters.add("settings", settingsConfig);
+    JsonObject functionConfig = new JsonObject();
+    functionConfig.addProperty("bucket", "*");
+    functionConfig.addProperty("scope", "*");
+    parameters.add("function_scope", functionConfig);
     return parameters;
   }
 
