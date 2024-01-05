@@ -41,3 +41,5 @@ local:
 		-n "Release $(PROJECT_VERSION)" \
 		$(PROJECT_VERSION) \
 		./core/target/ycsb-couchbase.zip
+local_recall:
+		gh release delete -R "mminichino/$(PROJECT_NAME)" $(PROJECT_VERSION) --cleanup-tag -y

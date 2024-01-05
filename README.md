@@ -15,7 +15,7 @@ for public cloud based DBaaS deployments.
 ### 2. Set up YCSB
 Download the distribution to begin testing.
 ```
-curl -OLs https://github.com/couchbaselabs/ycsb-couchbase/releases/download/2.0.2a0/ycsb-couchbase.zip
+curl -OLs https://github.com/couchbaselabs/ycsb-couchbase/releases/download/2.0.1/ycsb-couchbase.zip
 ```
 ```
 unzip ycsb-couchbase.zip
