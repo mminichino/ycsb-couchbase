@@ -153,26 +153,27 @@ public class RESTInterface {
     return responseCode;
   }
 
-  public void checkCapellaResponse(JsonObject response) {
-    if (!response.has("data")) {
-      String message = "Can not access Capella API: Response Code: " + responseCode;
-      if (response.has("hint")) {
-        message = message + " Hint: " + response.get("hint").getAsString();
+  public RESTInterface validate() {
+    if (responseCode >= 300 ) {
+      try {
+        Gson gson = new Gson();
+        JsonObject response = gson.fromJson(new String(responseBody), JsonObject.class);
+        String message = "Can not access Capella API: Response Code: " + responseCode;
+        if (response.has("hint")) {
+          message = message + " Hint: " + response.get("hint").getAsString();
+        }
+        throw new RuntimeException(message);
+      } catch (JsonSyntaxException e) {
+        throw new RuntimeException("Invalid response from API endpoint: response code: " + responseCode);
       }
-      throw new RuntimeException(message);
     }
+    return this;
   }
 
   public List<JsonElement> getCapella(String endpoint) {
-    JsonObject response;
     HttpUrl url = buildUrl(endpoint);
-    try {
-      response = get(url).json();
-      checkCapellaResponse(response);
-      return new ArrayList<>(response.get("data").getAsJsonArray().asList());
-    } catch (JsonSyntaxException e) {
-      throw new RuntimeException("Invalid response from API endpoint: response code: " + responseCode);
-    }
+    JsonObject response = get(url).validate().json();
+    return new ArrayList<>(response.get("data").getAsJsonArray().asList());
   }
 
   public HttpUrl buildUrl(String endpoint) {
@@ -230,14 +231,7 @@ public class RESTInterface {
 
   public List<JsonElement> getCapellaList(String endpoint) {
     HttpUrl url = buildPageUrl(endpoint, 1, 10);
-    JsonObject cursor;
-
-    try {
-      cursor = get(url).json();
-      checkCapellaResponse(cursor);
-    } catch (JsonSyntaxException e) {
-      throw new RuntimeException("Invalid response from API endpoint: response code: " + responseCode);
-    }
+    JsonObject cursor = get(url).validate().json();
 
     int totalItems = cursor.get("cursor").getAsJsonObject().get("pages").getAsJsonObject().get("totalItems").getAsInt();
     int pages = (int) Math.ceil(totalItems / 10.0);
