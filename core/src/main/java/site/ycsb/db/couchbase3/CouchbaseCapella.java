@@ -6,17 +6,25 @@ import com.google.gson.JsonObject;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
 import java.util.stream.Stream;
+import java.util.Properties;
 
 /**
  * Couchbase Capella Utility.
  */
 public class CouchbaseCapella {
+  private static final String PROPERTY_FILE = "db.properties";
+  private static final String PROPERTY_TEST = "test.properties";
+  private static final String API_ENDPOINT_PROPERTY = "capella.api.endpoint";
+  private static final String AUTH_FILE_PROPERTY = "capella.api.authfile";
+  private static final String AUTH_FILE_NAME = "default-api-key-token.txt";
   private static final String CAPELLA_API_ENDPOINT = "cloudapi.cloud.couchbase.com";
   private final RESTInterface capella;
   private String apiKey;
@@ -25,8 +33,24 @@ public class CouchbaseCapella {
   private final String databaseId;
 
   public CouchbaseCapella(String project, String database) {
+    ClassLoader classloader = Thread.currentThread().getContextClassLoader();
+    URL propFile;
     Path homePath = Paths.get(System.getProperty("user.home"));
-    Path tokenFilePath = Paths.get(homePath.toString(), ".capella", "default-api-key-token.txt");
+    Properties properties = new Properties();
+
+    if ((propFile = classloader.getResource(PROPERTY_FILE)) != null
+        || (propFile = classloader.getResource(PROPERTY_TEST)) != null) {
+      try {
+        properties.load(propFile.openStream());
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    String authFileName = properties.getProperty(AUTH_FILE_PROPERTY, AUTH_FILE_NAME);
+    String apiEndpoint = properties.getProperty(API_ENDPOINT_PROPERTY, CAPELLA_API_ENDPOINT);
+
+    Path tokenFilePath = Paths.get(homePath.toString(), ".capella", authFileName);
 
     File inputFile = new File(tokenFilePath.toString());
     Scanner input;
@@ -45,11 +69,14 @@ public class CouchbaseCapella {
       }
     }
 
-    capella = new RESTInterface(CAPELLA_API_ENDPOINT, apiKey, true);
+    capella = new RESTInterface(apiEndpoint, apiKey, true);
 
     organizationId = getOrganizationId();
+    if (organizationId == null) throw new RuntimeException("Can not get Organization ID");
     projectId = getProjectId(project);
+    if (projectId == null) throw new RuntimeException("Can not get Project ID for project " + project);
     databaseId = getDatabaseId(database);
+    if (databaseId == null) throw new RuntimeException("Can not get Database ID for cluster " + database);
   }
 
   public String getOrganizationId() {

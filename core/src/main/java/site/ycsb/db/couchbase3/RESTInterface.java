@@ -3,6 +3,7 @@ package site.ycsb.db.couchbase3;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 import okhttp3.*;
 import okhttp3.logging.HttpLoggingInterceptor;
 import org.jetbrains.annotations.NotNull;
@@ -152,10 +153,26 @@ public class RESTInterface {
     return responseCode;
   }
 
+  public void checkCapellaResponse(JsonObject response) {
+    if (!response.has("data")) {
+      String message = "Can not access Capella API: Response Code: " + responseCode;
+      if (response.has("hint")) {
+        message = message + " Hint: " + response.get("hint").getAsString();
+      }
+      throw new RuntimeException(message);
+    }
+  }
+
   public List<JsonElement> getCapella(String endpoint) {
+    JsonObject response;
     HttpUrl url = buildUrl(endpoint);
-    JsonObject response = get(url).json();
-    return new ArrayList<>(response.get("data").getAsJsonArray().asList());
+    try {
+      response = get(url).json();
+      checkCapellaResponse(response);
+      return new ArrayList<>(response.get("data").getAsJsonArray().asList());
+    } catch (JsonSyntaxException e) {
+      throw new RuntimeException("Invalid response from API endpoint: response code: " + responseCode);
+    }
   }
 
   public HttpUrl buildUrl(String endpoint) {
@@ -213,7 +230,14 @@ public class RESTInterface {
 
   public List<JsonElement> getCapellaList(String endpoint) {
     HttpUrl url = buildPageUrl(endpoint, 1, 10);
-    JsonObject cursor = get(url).json();
+    JsonObject cursor;
+
+    try {
+      cursor = get(url).json();
+      checkCapellaResponse(cursor);
+    } catch (JsonSyntaxException e) {
+      throw new RuntimeException("Invalid response from API endpoint: response code: " + responseCode);
+    }
 
     int totalItems = cursor.get("cursor").getAsJsonObject().get("pages").getAsJsonObject().get("totalItems").getAsInt();
     int pages = (int) Math.ceil(totalItems / 10.0);

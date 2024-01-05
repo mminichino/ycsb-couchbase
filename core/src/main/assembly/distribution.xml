@@ -14,6 +14,15 @@
     </files>
     <fileSets>
         <fileSet>
+            <directory>../core/src/main/conf</directory>
+            <outputDirectory>conf</outputDirectory>
+            <fileMode>0644</fileMode>
+            <includes>
+                <include>*.js</include>
+                <include>*.json</include>
+            </includes>
+        </fileSet>
+        <fileSet>
             <directory>..</directory>
             <outputDirectory>.</outputDirectory>
             <fileMode>0644</fileMode>
