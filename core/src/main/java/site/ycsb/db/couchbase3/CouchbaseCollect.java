@@ -5,13 +5,13 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import io.micrometer.core.instrument.util.IOUtils;
 import org.slf4j.LoggerFactory;
 import site.ycsb.measurements.RemoteStatistics;
 
 import java.io.IOException;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -81,9 +81,13 @@ public class CouchbaseCollect extends RemoteStatistics {
 
     URL configFile = classloader.getResource(STATISTICS_CONFIG_FILE);
     try {
-      String configJson = new String(Files.readAllBytes(Paths.get(Objects.requireNonNull(configFile).getPath())));
-      Gson gson = new Gson();
-      metricList = gson.fromJson(configJson, JsonArray.class);
+      if (configFile != null) {
+        String configJson = IOUtils.toString(configFile.openStream(), StandardCharsets.UTF_8);
+        Gson gson = new Gson();
+        metricList = gson.fromJson(configJson, JsonArray.class);
+      } else {
+        throw new RuntimeException("Can not access statistics config file");
+      }
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

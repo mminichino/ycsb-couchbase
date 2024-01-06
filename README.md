@@ -31,7 +31,7 @@ On Windows:
 ```
 notepad conf\db.properties
 ```
-On Linux macOS:
+On Linux/macOS:
 ```
 bin/run.sh
 ```
