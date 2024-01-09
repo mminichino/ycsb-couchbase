@@ -4,8 +4,8 @@
     "label": "CPU",
     "type": "GAUGE",
     "mode": "SYSTEM",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "percent"
   },
   {
@@ -13,8 +13,8 @@
     "label": "Mem",
     "type": "GAUGE",
     "mode": "SYSTEM",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "to_gib"
   },
   {
@@ -22,8 +22,8 @@
     "label": "Free",
     "type": "GAUGE",
     "mode": "SYSTEM",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "to_gib"
   },
   {
@@ -31,8 +31,8 @@
     "label": "sqlReq",
     "type": "COUNTER",
     "mode": "SYSTEM",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "none"
   },
   {
@@ -40,8 +40,8 @@
     "label": "sqlActReq",
     "type": "GAUGE",
     "mode": "SYSTEM",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "none"
   },
   {
@@ -49,8 +49,8 @@
     "label": "sqlLoad",
     "type": "GAUGE",
     "mode": "SYSTEM",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "percent"
   },
   {
@@ -58,8 +58,8 @@
     "label": "sqlReqTime",
     "type": "COUNTER",
     "mode": "SYSTEM",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": "n1ql_requests",
+    "rate": false,
     "transform": "from_ns"
   },
   {
@@ -67,8 +67,8 @@
     "label": "sqlSvcTime",
     "type": "COUNTER",
     "mode": "SYSTEM",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": "n1ql_requests",
+    "rate": false,
     "transform": "from_ns"
   },
   {
@@ -76,8 +76,8 @@
     "label": "Resident",
     "type": "GAUGE",
     "mode": "BUCKET",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "inverse"
   },
   {
@@ -85,8 +85,8 @@
     "label": "Queue",
     "type": "GAUGE",
     "mode": "BUCKET",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "none"
   },
   {
@@ -94,8 +94,8 @@
     "label": "Todo",
     "type": "GAUGE",
     "mode": "BUCKET",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "none"
   },
   {
@@ -103,8 +103,8 @@
     "label": "Read",
     "type": "COUNTER",
     "mode": "BUCKET",
-    "decimal": false,
-    "perSecond": true,
+    "divisor": null,
+    "rate": true,
     "transform": "to_gib"
   },
   {
@@ -112,8 +112,8 @@
     "label": "Write",
     "type": "COUNTER",
     "mode": "BUCKET",
-    "decimal": false,
-    "perSecond": true,
+    "divisor": null,
+    "rate": true,
     "transform": "to_gib"
   },
   {
@@ -121,8 +121,8 @@
     "label": "Items",
     "type": "TOTAL",
     "mode": "BUCKET",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "comma_delim"
   },
   {
@@ -130,8 +130,8 @@
     "label": "XDCRResp",
     "type": "GAUGE",
     "mode": "XDCR",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "to_ms"
   },
   {
@@ -139,8 +139,8 @@
     "label": "XDCRLat",
     "type": "GAUGE",
     "mode": "XDCR",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "to_ms"
   },
   {
@@ -148,8 +148,8 @@
     "label": "XDCRData",
     "type": "COUNTER",
     "mode": "XDCR",
-    "decimal": false,
-    "perSecond": false,
+    "divisor": null,
+    "rate": false,
     "transform": "to_gib"
   }
 ]

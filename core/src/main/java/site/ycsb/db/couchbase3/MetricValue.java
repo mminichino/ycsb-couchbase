@@ -11,8 +11,12 @@ public class MetricValue {
   private long previousTimestamp = 0;
   private double current = 0.0;
   private long currentTimestamp = 0;
+  private final boolean rate;
+  private final MetricType type;
 
-  public MetricValue() {
+  public MetricValue(MetricType type, boolean rate) {
+    this.type = type;
+    this.rate = rate;
   }
 
   public void setValue(JsonObject block) {
@@ -36,12 +40,21 @@ public class MetricValue {
   }
 
   public double getValue() {
-    return this.current;
+    if (type == MetricType.COUNTER) {
+      return getDelta();
+    } else {
+      return this.current;
+    }
   }
 
   public double getDelta() {
     if (this.current >= this.previous) {
-      return this.current - this.previous;
+      double diff = this.current - this.previous;
+      if (rate) {
+        return getPerSec(diff);
+      } else {
+        return diff;
+      }
     } else {
       return 0.0;
     }
@@ -55,10 +68,9 @@ public class MetricValue {
     }
   }
 
-  public double getPerSec() {
+  public double getPerSec(double diff) {
     long timeDelta = getTimeDelta();
     if (timeDelta > 0) {
-      double diff = getDelta();
       return diff / timeDelta;
     } else {
       return 0.0;

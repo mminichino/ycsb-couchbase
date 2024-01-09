@@ -18,6 +18,7 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.stream.IntStream;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -48,7 +49,7 @@ public class CouchbaseCollect extends RemoteStatistics {
   private static String bucketName;
   private static boolean sslMode;
   private static JsonArray metricList;
-  private static final List<MetricValue> resultList = new ArrayList<>();
+  private static final DecimalFormat metricFormat = new DecimalFormat("0.##");
   private static final Map<String, MetricValue> resultMatrix = new LinkedHashMap<>();
 
   /**
@@ -87,12 +88,11 @@ public class CouchbaseCollect extends RemoteStatistics {
         String configJson = IOUtils.toString(configFile.openStream(), StandardCharsets.UTF_8);
         Gson gson = new Gson();
         metricList = gson.fromJson(configJson, JsonArray.class);
-        for (int i = 0; i < metricList.size(); i++) {
-          resultList.add(new MetricValue());
-        }
         for (JsonElement metric : metricList) {
           String name = metric.getAsJsonObject().get("metric").getAsString();
-          resultMatrix.put(name, new MetricValue());
+          boolean rate = metric.getAsJsonObject().get("rate").getAsBoolean();
+          MetricType type = MetricType.valueOf(metric.getAsJsonObject().get("type").getAsString());
+          resultMatrix.put(name, new MetricValue(type, rate));
         }
       } else {
         throw new RuntimeException("Can not access statistics config file");
@@ -121,6 +121,7 @@ public class CouchbaseCollect extends RemoteStatistics {
 
     Runnable callApi = () -> {
       StringBuilder line = new StringBuilder();
+      IntStream metricStream = IntStream.range(0, metricList.size());
       String timeStamp = timeStampFormat.format(new Date());
       line.append(String.format("%s ", timeStamp));
 
@@ -134,23 +135,21 @@ public class CouchbaseCollect extends RemoteStatistics {
         Gson gson = new Gson();
         JsonArray data = gson.fromJson(response.contentAsString(), JsonArray.class);
 
-        for (int i = 0; i < metricList.size(); i++) {
+        metricStream.parallel().forEach(i -> {
           JsonElement metric = metricList.get(i);
           JsonObject result = data.getAsJsonArray().get(i).getAsJsonObject();
           String name = metric.getAsJsonObject().get("metric").getAsString();
           resultMatrix.get(name).setValue(result);
-        }
+        });
 
         for (int i = 0; i < metricList.size(); i++) {
           JsonElement metric = metricList.get(i);
           String name = metric.getAsJsonObject().get("metric").getAsString();
-          MetricType type = MetricType.valueOf(metric.getAsJsonObject().get("type").getAsString());
-          boolean decimal = metric.getAsJsonObject().get("decimal").getAsBoolean();
-          boolean perSecond = metric.getAsJsonObject().get("perSecond").getAsBoolean();
+          String divisor = metric.getAsJsonObject().get("divisor").isJsonNull() ? null
+              : metric.getAsJsonObject().get("divisor").getAsString();
           String transform = metric.getAsJsonObject().get("transform").getAsString();
           String label = metric.getAsJsonObject().get("label").getAsString();
-          MetricValue metricValue = resultMatrix.get(name);
-          line.append(generate(metricValue, type, decimal, perSecond, transform, label));
+          line.append(generate(name, divisor, transform, label));
         }
       } catch (Exception e) {
         LOGGER.error(e.getMessage(), e);
@@ -185,9 +184,8 @@ public class CouchbaseCollect extends RemoteStatistics {
       block.addProperty("nodesAggregation", "avg");
     }
 
-    block.addProperty("alignTimestamps", true);
-    block.addProperty("step", 10);
-    block.addProperty("start", -20);
+    block.addProperty("step", 1);
+    block.addProperty("start", -1);
 
     return block;
   }
@@ -218,111 +216,74 @@ public class CouchbaseCollect extends RemoteStatistics {
     return metric;
   }
 
-  public String generate(MetricValue metric, MetricType type, boolean decimal,
-                         boolean perSecond, String transform, String label) {
-    double finalValue;
-    if (type == MetricType.COUNTER) {
-      if (perSecond) {
-        finalValue = metric.getPerSec();
+  public String generate(String metric, String divisor, String transform, String label) {
+    double finalValue = resultMatrix.get(metric).getValue();
+    String valueString;
+
+    if (divisor != null) {
+      if (resultMatrix.containsKey(divisor)) {
+        double value = resultMatrix.get(divisor).getValue();
+        finalValue = value > 0 ? finalValue / value : finalValue;
       } else {
-        finalValue = metric.getDelta();
+        LOGGER.warn("Divisor metric " + divisor + " not found");
       }
-    } else {
-      finalValue = metric.getValue();
     }
 
     switch (transform) {
       case "to_gib":
-        return formatDataSize(finalValue, label);
+        valueString = formatDataSize(finalValue);
+        break;
       case "from_ns":
-        return fromNanoSeconds(finalValue, label, decimal);
+        valueString = fromNanoSeconds(finalValue);
+        break;
       case "inverse":
-        return percentInv(finalValue, label, decimal);
+        valueString = percentInv(finalValue);
+        break;
       case "comma_delim":
-        return commaDelimit(finalValue, label, decimal);
+        valueString = commaDelimit(finalValue);
+        break;
       case "to_ms":
-        return toMilliSeconds(finalValue, label, decimal);
+        valueString = toMilliSeconds(finalValue);
+        break;
       case "percent":
-        return percentage(finalValue, label, decimal);
+        valueString = percentage(finalValue);
+        break;
       default:
-        return defaultFormat(finalValue, label, decimal);
+        valueString = defaultFormat(finalValue);
     }
+
+    return label + ": " + valueString + " ";
   }
 
-  private String defaultFormat(double value, String label, boolean decimal) {
-    if (decimal) {
-      return String.format("%s: %.2f ", label, value);
-    } else {
-      return String.format("%s: %d ", label, Math.round(value));
-    }
+  private String defaultFormat(double value) {
+    return metricFormat.format(value);
   }
 
-  private String toMilliSeconds(double seconds, String label, boolean decimal) {
+  private String toMilliSeconds(double seconds) {
     double value = seconds * 1000;
-    if (decimal) {
-      return String.format("%s: %.2f ms ", label, value);
-    } else {
-      return String.format("%s: %d ms ", label, Math.round(value));
-    }
+    return metricFormat.format(value) + " ms";
   }
 
-  private String commaDelimit(double value, String label, boolean decimal) {
-    DecimalFormat formatter;
-    if (decimal) {
-      formatter = new DecimalFormat("#,###.##");
-    } else {
-      formatter = new DecimalFormat("#,###");
-    }
-    return String.format("%s: %s ", label, formatter.format(value));
+  private String commaDelimit(double value) {
+    DecimalFormat formatter = new DecimalFormat("#,###.##");
+    return formatter.format(value);
   }
 
-  private String percentInv(double percentage, String label, boolean decimal) {
+  private String percentInv(double percentage) {
     double value = 100 - percentage;
-    if (decimal) {
-      return String.format("%s: %.2f %% ", label, value);
-    } else {
-      return String.format("%s: %d %% ", label, Math.round(value));
-    }
+    return metricFormat.format(value) + " %";
   }
 
-  private String percentage(double percentage, String label, boolean decimal) {
-    if (decimal) {
-      return String.format("%s: %.2f %% ", label, percentage);
-    } else {
-      return String.format("%s: %d %% ", label, Math.round(percentage));
-    }
+  private String percentage(double percentage) {
+    return metricFormat.format(percentage) + " %";
   }
 
-  private String fromNanoSeconds(double nano, String label, boolean decimal) {
+  private String fromNanoSeconds(double nano) {
     double value = nano / 1000000;
-    if (decimal) {
-      return String.format("%s: %.2f ms ", label, value);
-    } else {
-      return String.format("%s: %d ms ", label, Math.round(value));
-    }
+    return metricFormat.format(value) + " ms";
   }
 
-  private String formatDurationValue(double millis, String label, boolean decimal) {
-    String output;
-
-    double seconds = millis / 1000;
-    double minutes = ((millis / 1000) / 60);
-    double hours = (((millis / 1000) / 60) / 60);
-
-    if (hours > 1) {
-      output = decimal ? String.format("%.2f hr", hours) : String.format("%d hr", Math.round(hours));
-    } else if (minutes > 1) {
-      output = decimal ? String.format("%.2f min", minutes) : String.format("%d min", Math.round(minutes));
-    } else if (seconds > 1) {
-      output = decimal ? String.format("%.2f sec", seconds) : String.format("%d sec", Math.round(seconds));
-    } else {
-      output = decimal ? String.format("%.2f ms", millis) : String.format("%d ms", Math.round(millis));
-    }
-
-    return String.format("%s: %s ", label, output);
-  }
-
-  private String formatDataSize(double bytes, String label) {
+  private String formatDataSize(double bytes) {
     String output;
 
     double k = bytes / 1024.0;
@@ -342,7 +303,7 @@ public class CouchbaseCollect extends RemoteStatistics {
       output = Math.round(bytes) + " B";
     }
 
-    return String.format("%s: %s ", label, output);
+    return output;
   }
 
   @Override
