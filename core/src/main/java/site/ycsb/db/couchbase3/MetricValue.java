@@ -2,140 +2,66 @@ package site.ycsb.db.couchbase3;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import java.text.DecimalFormat;
 
 /**
  * Collected metric values.
  */
 public class MetricValue {
-  private final double first;
-  private final double second;
-  private final MetricType type;
-  private final boolean decimal;
-  private final String transform;
-  private final String label;
+  private double previous = 0.0;
+  private long previousTimestamp = 0;
+  private double current = 0.0;
+  private long currentTimestamp = 0;
 
-  public MetricValue(JsonObject block, MetricType type, boolean decimal, String transform, String label) {
-    JsonArray data = block.get("data").getAsJsonArray();
+  public MetricValue() {
+  }
 
-    if (!data.isEmpty()) {
-      JsonArray values = data.get(0).getAsJsonObject().get("values").getAsJsonArray();
-      double first_val = Double.parseDouble(values.get(0).getAsJsonArray().get(1).getAsString());
-      double second_val = Double.parseDouble(values.get(1).getAsJsonArray().get(1).getAsString());
-      this.first = Double.isNaN(first_val) ? 0 : Double.isInfinite(first_val) ? Double.MAX_VALUE : first_val;
-      this.second = Double.isNaN(second_val) ? 0 : Double.isInfinite(second_val) ? Double.MAX_VALUE : second_val;
-    } else {
-      this.first = 0.0;
-      this.second = 0.0;
+  public void setValue(JsonObject block) {
+    double value = 0.0;
+    long timestamp = 0;
+
+    if (block.has("data")) {
+      JsonArray data = block.get("data").getAsJsonArray();
+      if (!data.isEmpty()) {
+        JsonArray values = data.get(0).getAsJsonObject().get("values").getAsJsonArray();
+        timestamp = Long.parseLong(values.get(0).getAsJsonArray().get(0).getAsString());
+        value = Double.parseDouble(values.get(0).getAsJsonArray().get(1).getAsString());
+        value = Double.isNaN(value) ? 0 : Double.isInfinite(value) ? Double.MAX_VALUE : Math.abs(value);
+      }
     }
 
-    this.type = type;
-    this.decimal = decimal;
-    this.transform = transform;
-    this.label = label;
+    this.previous = this.current > 0 ? this.current : value;
+    this.current = value;
+    this.previousTimestamp = this.currentTimestamp > 0 ? this.currentTimestamp : timestamp;
+    this.currentTimestamp = timestamp;
   }
 
-  public long getLong() {
-      return Math.round(this.second);
-  }
-
-  public double getDouble() {
-      return this.second;
+  public double getValue() {
+    return this.current;
   }
 
   public double getDelta() {
-      return this.second - this.first;
-  }
-
-  public String generate() {
-    double finalValue;
-    if (type == MetricType.COUNTER) {
-      finalValue = getDelta();
+    if (this.current >= this.previous) {
+      return this.current - this.previous;
     } else {
-      finalValue = getDouble();
-    }
-
-    switch (transform) {
-      case "to_gib":
-        return formatDataSize(finalValue);
-      case "from_ns":
-        return fromNanoSeconds(finalValue);
-      case "inverse":
-        return percentInv(finalValue);
-      case "comma_delim":
-        return commaDelimit(finalValue);
-      case "to_ms":
-        return toMilliSeconds(finalValue);
-      default:
-        return defaultFormat(finalValue);
+      return 0.0;
     }
   }
 
-  private String defaultFormat(double value) {
-    if (decimal) {
-      return String.format("%s: %.2f ", label, value);
+  public long getTimeDelta() {
+    if (this.currentTimestamp >= this.previousTimestamp) {
+      return this.currentTimestamp - this.previousTimestamp;
     } else {
-      return String.format("%s: %d ", label, Math.round(value));
+      return 0;
     }
   }
 
-  private String toMilliSeconds(double seconds) {
-    double value = seconds * 1000;
-    if (decimal) {
-      return String.format("%s: %.2f ms ", label, value);
+  public double getPerSec() {
+    long timeDelta = getTimeDelta();
+    if (timeDelta > 0) {
+      double diff = getDelta();
+      return diff / timeDelta;
     } else {
-      return String.format("%s: %d ms ", label, Math.round(value));
+      return 0.0;
     }
-  }
-
-  private String commaDelimit(double value) {
-    DecimalFormat formatter;
-    if (decimal) {
-      formatter = new DecimalFormat("#,###.##");
-    } else {
-      formatter = new DecimalFormat("#,###");
-    }
-    return String.format("%s: %s ", label, formatter.format(value));
-  }
-
-  private String percentInv(double percentage) {
-    double value = 100 - percentage;
-    if (decimal) {
-      return String.format("%s: %.2f%% ", label, value);
-    } else {
-      return String.format("%s: %d%% ", label, Math.round(value));
-    }
-  }
-
-  private String fromNanoSeconds(double nano) {
-    double value = nano / 1000000;
-    if (decimal) {
-      return String.format("%s: %.2f ms ", label, value);
-    } else {
-      return String.format("%s: %d ms ", label, Math.round(value));
-    }
-  }
-
-  private String formatDataSize(double bytes) {
-    String output;
-
-    double k = bytes / 1024.0;
-    double m = ((bytes / 1024.0) / 1024.0);
-    double g = (((bytes / 1024.0) / 1024.0) / 1024.0);
-    double t = ((((bytes / 1024.0) / 1024.0) / 1024.0) / 1024.0);
-
-    if (t > 1) {
-      output = Math.round(t) + " TB";
-    } else if (g > 1) {
-      output = Math.round(g) + " GB";
-    } else if (m > 1) {
-      output = Math.round(m) + " MB";
-    } else if (k > 1) {
-      output = Math.round(k) + " KB";
-    } else {
-      output = Math.round(bytes) + " B";
-    }
-
-    return String.format("%s: %s ", label, output);
   }
 }

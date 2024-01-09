@@ -5,6 +5,7 @@
     "type": "GAUGE",
     "mode": "SYSTEM",
     "decimal": false,
+    "perSecond": false,
     "transform": "percent"
   },
   {
@@ -13,6 +14,7 @@
     "type": "GAUGE",
     "mode": "SYSTEM",
     "decimal": false,
+    "perSecond": false,
     "transform": "to_gib"
   },
   {
@@ -21,6 +23,7 @@
     "type": "GAUGE",
     "mode": "SYSTEM",
     "decimal": false,
+    "perSecond": false,
     "transform": "to_gib"
   },
   {
@@ -29,6 +32,7 @@
     "type": "COUNTER",
     "mode": "SYSTEM",
     "decimal": false,
+    "perSecond": false,
     "transform": "none"
   },
   {
@@ -37,6 +41,7 @@
     "type": "GAUGE",
     "mode": "SYSTEM",
     "decimal": false,
+    "perSecond": false,
     "transform": "none"
   },
   {
@@ -45,6 +50,7 @@
     "type": "GAUGE",
     "mode": "SYSTEM",
     "decimal": false,
+    "perSecond": false,
     "transform": "percent"
   },
   {
@@ -53,6 +59,7 @@
     "type": "COUNTER",
     "mode": "SYSTEM",
     "decimal": false,
+    "perSecond": false,
     "transform": "from_ns"
   },
   {
@@ -61,6 +68,7 @@
     "type": "COUNTER",
     "mode": "SYSTEM",
     "decimal": false,
+    "perSecond": false,
     "transform": "from_ns"
   },
   {
@@ -69,6 +77,7 @@
     "type": "GAUGE",
     "mode": "BUCKET",
     "decimal": false,
+    "perSecond": false,
     "transform": "inverse"
   },
   {
@@ -77,6 +86,7 @@
     "type": "GAUGE",
     "mode": "BUCKET",
     "decimal": false,
+    "perSecond": false,
     "transform": "none"
   },
   {
@@ -85,22 +95,25 @@
     "type": "GAUGE",
     "mode": "BUCKET",
     "decimal": false,
+    "perSecond": false,
     "transform": "none"
   },
   {
     "metric": "kv_ep_io_total_read_bytes_bytes",
     "label": "Read",
-    "type": "GAUGE",
+    "type": "COUNTER",
     "mode": "BUCKET",
     "decimal": false,
+    "perSecond": true,
     "transform": "to_gib"
   },
   {
     "metric": "kv_ep_io_total_write_bytes_bytes",
     "label": "Write",
-    "type": "GAUGE",
+    "type": "COUNTER",
     "mode": "BUCKET",
     "decimal": false,
+    "perSecond": true,
     "transform": "to_gib"
   },
   {
@@ -109,6 +122,7 @@
     "type": "TOTAL",
     "mode": "BUCKET",
     "decimal": false,
+    "perSecond": false,
     "transform": "comma_delim"
   },
   {
@@ -117,6 +131,7 @@
     "type": "GAUGE",
     "mode": "XDCR",
     "decimal": false,
+    "perSecond": false,
     "transform": "to_ms"
   },
   {
@@ -125,6 +140,7 @@
     "type": "GAUGE",
     "mode": "XDCR",
     "decimal": false,
+    "perSecond": false,
     "transform": "to_ms"
   },
   {
@@ -133,6 +149,7 @@
     "type": "COUNTER",
     "mode": "XDCR",
     "decimal": false,
+    "perSecond": false,
     "transform": "to_gib"
   }
 ]

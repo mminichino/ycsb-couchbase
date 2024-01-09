@@ -48,6 +48,8 @@ public class CouchbaseCollect extends RemoteStatistics {
   private static String bucketName;
   private static boolean sslMode;
   private static JsonArray metricList;
+  private static final List<MetricValue> resultList = new ArrayList<>();
+  private static final Map<String, MetricValue> resultMatrix = new LinkedHashMap<>();
 
   /**
    * Metric Mode.
@@ -85,6 +87,13 @@ public class CouchbaseCollect extends RemoteStatistics {
         String configJson = IOUtils.toString(configFile.openStream(), StandardCharsets.UTF_8);
         Gson gson = new Gson();
         metricList = gson.fromJson(configJson, JsonArray.class);
+        for (int i = 0; i < metricList.size(); i++) {
+          resultList.add(new MetricValue());
+        }
+        for (JsonElement metric : metricList) {
+          String name = metric.getAsJsonObject().get("metric").getAsString();
+          resultMatrix.put(name, new MetricValue());
+        }
       } else {
         throw new RuntimeException("Can not access statistics config file");
       }
@@ -125,15 +134,23 @@ public class CouchbaseCollect extends RemoteStatistics {
         Gson gson = new Gson();
         JsonArray data = gson.fromJson(response.contentAsString(), JsonArray.class);
 
-        int counter = 0;
-        for (JsonElement metric : metricList) {
-          JsonObject result = data.getAsJsonArray().get(counter).getAsJsonObject();
+        for (int i = 0; i < metricList.size(); i++) {
+          JsonElement metric = metricList.get(i);
+          JsonObject result = data.getAsJsonArray().get(i).getAsJsonObject();
+          String name = metric.getAsJsonObject().get("metric").getAsString();
+          resultMatrix.get(name).setValue(result);
+        }
+
+        for (int i = 0; i < metricList.size(); i++) {
+          JsonElement metric = metricList.get(i);
+          String name = metric.getAsJsonObject().get("metric").getAsString();
           MetricType type = MetricType.valueOf(metric.getAsJsonObject().get("type").getAsString());
           boolean decimal = metric.getAsJsonObject().get("decimal").getAsBoolean();
+          boolean perSecond = metric.getAsJsonObject().get("perSecond").getAsBoolean();
           String transform = metric.getAsJsonObject().get("transform").getAsString();
           String label = metric.getAsJsonObject().get("label").getAsString();
-          line.append(formatValue(result, type, decimal, transform, label));
-          counter += 1;
+          MetricValue metricValue = resultMatrix.get(name);
+          line.append(generate(metricValue, type, decimal, perSecond, transform, label));
         }
       } catch (Exception e) {
         LOGGER.error(e.getMessage(), e);
@@ -201,29 +218,17 @@ public class CouchbaseCollect extends RemoteStatistics {
     return metric;
   }
 
-  public String formatValue(JsonObject block, MetricType type, boolean decimal, String transform, String label) {
-    JsonArray data = block.get("data").getAsJsonArray();
-    double first = 0.0;
-    double second = 0.0;
-
-    if (!data.isEmpty()) {
-      JsonArray values = data.get(0).getAsJsonObject().get("values").getAsJsonArray();
-      double first_val = Double.parseDouble(values.get(0).getAsJsonArray().get(1).getAsString());
-      double second_val = Double.parseDouble(values.get(1).getAsJsonArray().get(1).getAsString());
-      first = Double.isNaN(first_val) ? 0 : Double.isInfinite(first_val) ? Double.MAX_VALUE : Math.abs(first_val);
-      second = Double.isNaN(second_val) ? 0 : Double.isInfinite(second_val) ? Double.MAX_VALUE : Math.abs(second_val);
-    }
-
-    return generate(first, second, type, decimal, transform, label);
-  }
-
-  public String generate(double first, double second, MetricType type,
-                         boolean decimal, String transform, String label) {
+  public String generate(MetricValue metric, MetricType type, boolean decimal,
+                         boolean perSecond, String transform, String label) {
     double finalValue;
     if (type == MetricType.COUNTER) {
-      finalValue = second - first;
+      if (perSecond) {
+        finalValue = metric.getPerSec();
+      } else {
+        finalValue = metric.getDelta();
+      }
     } else {
-      finalValue = second;
+      finalValue = metric.getValue();
     }
 
     switch (transform) {
@@ -295,6 +300,26 @@ public class CouchbaseCollect extends RemoteStatistics {
     } else {
       return String.format("%s: %d ms ", label, Math.round(value));
     }
+  }
+
+  private String formatDurationValue(double millis, String label, boolean decimal) {
+    String output;
+
+    double seconds = millis / 1000;
+    double minutes = ((millis / 1000) / 60);
+    double hours = (((millis / 1000) / 60) / 60);
+
+    if (hours > 1) {
+      output = decimal ? String.format("%.2f hr", hours) : String.format("%d hr", Math.round(hours));
+    } else if (minutes > 1) {
+      output = decimal ? String.format("%.2f min", minutes) : String.format("%d min", Math.round(minutes));
+    } else if (seconds > 1) {
+      output = decimal ? String.format("%.2f sec", seconds) : String.format("%d sec", Math.round(seconds));
+    } else {
+      output = decimal ? String.format("%.2f ms", millis) : String.format("%d ms", Math.round(millis));
+    }
+
+    return String.format("%s: %s ", label, output);
   }
 
   private String formatDataSize(double bytes, String label) {
