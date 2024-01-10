@@ -25,6 +25,7 @@ major:
 setup:
 		python setup.py sdist
 package:
+		bumpversion --allow-dirty build
 		mvn clean install
 release: package download
 download:
