@@ -4,7 +4,7 @@ export PROJECT_VERSION := $(shell cat VERSION)
 
 commit:
 		git commit -am "Version $(shell cat VERSION)"
-		git push
+		git push -u origin
 branch:
 		git checkout -b "Version_$(shell cat VERSION)"
 		git push --set-upstream origin "Version_$(shell cat VERSION)"
@@ -14,7 +14,7 @@ merge:
 		git merge "Version_$(shell cat VERSION)"
 		git push origin main
 remote:
-		git push -u cblabs main
+		git push cblabs main
 sync:
 		rsync -acv --exclude db/ --exclude .DS_Store core/src/main/java/site/ycsb/ ../YCSB/core/src/main/java/site/ycsb/
 		rsync -acv --exclude db/ --exclude .DS_Store core/src/test/java/site/ycsb/ ../YCSB/core/src/test/java/site/ycsb/
