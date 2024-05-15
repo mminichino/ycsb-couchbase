@@ -17,11 +17,7 @@ while getopts "w:R:O:T:lrMS" opt
 do
   case $opt in
     w)
-      if [ -f "$OPTARG" ]; then
-        WORKLOAD=$OPTARG
-      else
-        echo "File $OPTARG does not exist"
-      fi
+      WORKLOAD=$OPTARG
       ;;
     l)
       LOAD_MODE=1
@@ -57,7 +53,7 @@ if [ -z "$WORKLOAD" ]; then
     fi
   done
 else
-  WORKLOAD_LIST=$WORKLOAD
+  WORKLOAD_LIST="workloads/workload${WORKLOAD}"
 fi
 
 for workload in $WORKLOAD_LIST; do
