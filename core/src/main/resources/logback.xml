@@ -22,6 +22,10 @@
     </encoder>
   </appender>
 
+  <root level="ERROR">
+    <appender-ref ref="STDOUT" />
+  </root>
+
   <logger name="ch.qos.logback" level="ERROR">
     <appender-ref ref="STDOUT" />
   </logger>
