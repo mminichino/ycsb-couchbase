@@ -21,6 +21,8 @@ import static com.couchbase.client.java.kv.MutateInOptions.mutateInOptions;
 import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
 import static com.couchbase.client.java.kv.GetOptions.getOptions;
 import static com.couchbase.client.java.query.QueryOptions.queryOptions;
+
+import ch.qos.logback.classic.Logger;
 import com.couchbase.client.core.deps.io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import com.couchbase.client.core.env.IoConfig;
 import com.couchbase.client.core.env.NetworkResolution;
@@ -30,6 +32,8 @@ import com.couchbase.client.core.error.DocumentNotFoundException;
 import com.couchbase.client.core.retry.FailFastRetryStrategy;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
+import com.couchbase.client.java.codec.RawJsonTranscoder;
+import com.couchbase.client.java.codec.Transcoder;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
@@ -55,8 +59,8 @@ import site.ycsb.*;
  * A class that implements the Couchbase Java SDK to be used with YCSB.
  */
 public class Couchbase3Client extends DB {
-  protected static final ch.qos.logback.classic.Logger LOGGER =
-      (ch.qos.logback.classic.Logger)LoggerFactory.getLogger("site.ycsb.db.couchbase3.Couchbase3Client");
+  protected static final Logger LOGGER =
+      (Logger)LoggerFactory.getLogger("site.ycsb.db.couchbase3.Couchbase3Client");
   private static final String PROPERTY_FILE = "db.properties";
   private static final String PROPERTY_TEST = "test.properties";
   public static final String COUCHBASE_HOST = "couchbase.hostname";
@@ -78,6 +82,8 @@ public class Couchbase3Client extends DB {
   private static int ttlSeconds;
   private boolean arrayMode;
   private String arrayKey;
+  private Transcoder transcoder;
+  private Class<?> contentType;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
 
   @Override
@@ -109,6 +115,16 @@ public class Couchbase3Client extends DB {
 
     if (debug) {
       LOGGER.setLevel(Level.DEBUG);
+    }
+
+    boolean nativeCodec = getProperties().getProperty("couchbase.codec", "ycsb").equals("native");
+
+    if (nativeCodec) {
+      transcoder = RawJsonTranscoder.INSTANCE;
+      contentType = String.class;
+    } else {
+      transcoder = MapTranscoder.INSTANCE;
+      contentType = Map.class;
     }
 
     durability =
@@ -225,21 +241,19 @@ public class Couchbase3Client extends DB {
    * @param table The name of the table.
    * @param key The record key of the record to read.
    * @param fields The list of fields to read, or null for all of them.
-   * @param result A HashMap of field/value pairs for the result.
+   * @param result A Map of field/value pairs for the result.
    */
   @Override
-  @SuppressWarnings("unchecked")
-  public Status read(final String table, final String key, final Set<String> fields,
-                     final Map<String, ByteIterator> result) {
+  public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     try {
-      return retryBlock(() -> {
-        try {
-          result.putAll(collection.get(key, getOptions().transcoder(MapTranscoder.INSTANCE)).contentAs(Map.class));
-          return Status.OK;
-        } catch (DocumentNotFoundException e) {
-          return Status.NOT_FOUND;
-        }
-      });
+      Object r = retryBlock(() -> collection.get(key, getOptions().transcoder(transcoder))
+          .contentAs(contentType));
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug(r.toString());
+      }
+      return Status.OK;
+    } catch (DocumentNotFoundException e) {
+      return Status.NOT_FOUND;
     } catch (Throwable t) {
       LOGGER.error("read transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
@@ -362,9 +376,9 @@ public class Couchbase3Client extends DB {
    * @param result A Vector of HashMaps, where each HashMap is a set field/value pairs for one record.
    */
   @Override
-  @SuppressWarnings("unchecked")
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
+    Vector<Object> results = new Vector<>();
     try {
       return retryBlock(() -> {
         final String query = "select raw meta().id from `" + bucketName + "` where meta().id >= \"$1\" limit $2;";
@@ -380,14 +394,17 @@ public class Couchbase3Client extends DB {
             .flatMapMany(res -> res.rowsAs(String.class).parallel())
             .parallel()
             .subscribe(
-                next -> result.add(collection.get(next, getOptions().transcoder(MapTranscoder.INSTANCE))
-                    .contentAs(HashMap.class)),
+                next -> results.add(collection.get(next, getOptions().transcoder(transcoder))
+                    .contentAs(contentType)),
                 error ->
                 {
                   LOGGER.debug(error.getMessage(), error);
                   throw new RuntimeException(error);
                 }
             );
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Scanned {} records", results.size());
+        }
         return Status.OK;
       });
     } catch (Throwable t) {

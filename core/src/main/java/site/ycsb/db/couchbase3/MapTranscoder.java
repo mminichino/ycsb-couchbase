@@ -10,11 +10,9 @@ import com.couchbase.client.core.error.EncodingFailureException;
 import com.couchbase.client.core.error.DecodingFailureException;
 import static com.couchbase.client.core.logging.RedactableArgument.redactUser;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import site.ycsb.ByteIterator;
-import site.ycsb.StringByteIterator;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,7 +24,6 @@ public class MapTranscoder implements Transcoder {
   private MapTranscoder() { }
 
   @Override
-  @SuppressWarnings("unchecked")
   public EncodedValue encode(final Object input) {
     if (input instanceof CommonOptions.BuiltCommonOptions || input instanceof CommonOptions) {
       throw InvalidArgumentException.fromMessage("No content provided, cannot " +
@@ -37,12 +34,11 @@ public class MapTranscoder implements Transcoder {
       return new EncodedValue((byte[]) input, CodecFlags.JSON_COMPAT_FLAGS);
     } else if (input instanceof Map) {
       ObjectMapper mapper = new ObjectMapper();
-      ObjectNode document = mapper.createObjectNode();
-      ((HashMap<String, ByteIterator>) input).entrySet()
-          .parallelStream()
-          .forEach(entry -> document.put(entry.getKey(), entry.getValue().toString()));
+      SimpleModule module = new SimpleModule("ByteIteratorSerializer");
+      module.addSerializer(ByteIterator.class, new ByteIteratorSerializer());
+      mapper.registerModule(module);
       try {
-        return new EncodedValue(mapper.writeValueAsBytes(document), CodecFlags.JSON_COMPAT_FLAGS);
+        return new EncodedValue(mapper.writeValueAsBytes(input), CodecFlags.JSON_COMPAT_FLAGS);
       } catch (Throwable t) {
         throw new EncodingFailureException("Serializing of content + " + redactUser(input) + " to JSON failed.", t);
       }
@@ -58,14 +54,13 @@ public class MapTranscoder implements Transcoder {
       return (T) input;
     } else if (target.equals(Map.class) || target.equals(HashMap.class)) {
       ObjectMapper mapper = new ObjectMapper();
-      TypeReference<HashMap<String, String>> typeRef = new TypeReference<>() {};
-      Map<String, ByteIterator> result = new HashMap<>();
+      SimpleModule module = new SimpleModule("ByteIteratorDeserializer");
+      module.addDeserializer(ByteIterator.class, new ByteIteratorDeserializer());
+      mapper.registerModule(module);
+      TypeReference<Map<String, ByteIterator>> typeRef = new TypeReference<>() {};
       try {
-        mapper.readValue(new String(input, StandardCharsets.UTF_8), typeRef).entrySet()
-            .parallelStream()
-            .forEach(entry -> result.put(entry.getKey(), new StringByteIterator(entry.getValue())));
-        return (T) result;
-      } catch (IOException e) {
+        return (T) mapper.readValue(new String(input, StandardCharsets.UTF_8), typeRef);
+      } catch (Throwable e) {
         throw new DecodingFailureException(e);
       }
     } else {
