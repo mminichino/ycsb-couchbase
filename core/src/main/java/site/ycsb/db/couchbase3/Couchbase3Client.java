@@ -26,7 +26,6 @@ import com.couchbase.client.core.env.IoConfig;
 import com.couchbase.client.core.env.NetworkResolution;
 import com.couchbase.client.core.env.SecurityConfig;
 import com.couchbase.client.core.env.TimeoutConfig;
-import com.couchbase.client.core.error.DecodingFailureException;
 import com.couchbase.client.core.error.DocumentNotFoundException;
 import com.couchbase.client.core.retry.FailFastRetryStrategy;
 import com.couchbase.client.java.*;
@@ -37,7 +36,6 @@ import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
 
 import java.io.IOException;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -45,12 +43,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import com.couchbase.client.java.json.JsonArray;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.slf4j.LoggerFactory;
+import ch.qos.logback.classic.Level;
 import site.ycsb.*;
 
 /**
@@ -107,6 +105,11 @@ public class Couchbase3Client extends DB {
     String scopeName = properties.getProperty(COUCHBASE_SCOPE, "_default");
     String collectionName = properties.getProperty(COUCHBASE_COLLECTION, "_default");
     boolean sslMode = properties.getProperty(COUCHBASE_SSL_MODE, "false").equals("true");
+    boolean debug = getProperties().getProperty("couchbase.debug", "false").equals("true");
+
+    if (debug) {
+      LOGGER.setLevel(Level.DEBUG);
+    }
 
     durability =
         setDurabilityLevel(Integer.parseInt(properties.getProperty("couchbase.durability", "0")));
@@ -359,12 +362,12 @@ public class Couchbase3Client extends DB {
    * @param result A Vector of HashMaps, where each HashMap is a set field/value pairs for one record.
    */
   @Override
+  @SuppressWarnings("unchecked")
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
     try {
       return retryBlock(() -> {
-        LOGGER.info("scan transaction startkey: {}", startkey);
-        final String query = "select * from " + bucketName + " where meta().id >= \"$1\" limit $2;";
+        final String query = "select raw meta().id from `" + bucketName + "` where meta().id >= \"$1\" limit $2;";
         cluster.reactive().query(query, queryOptions()
                 .pipelineBatch(128)
                 .pipelineCap(1024)
@@ -374,31 +377,16 @@ public class Couchbase3Client extends DB {
                 .maxParallelism(maxParallelism)
                 .retryStrategy(FailFastRetryStrategy.INSTANCE)
                 .parameters(JsonArray.from(startkey, recordcount)))
-            .flatMapMany(res -> res.rowsAs(byte[].class).parallel())
+            .flatMapMany(res -> res.rowsAs(String.class).parallel())
             .parallel()
             .subscribe(
-                    next -> {
-                      ObjectMapper mapper = new ObjectMapper();
-                      TypeReference<HashMap<String, HashMap<String, String>>> typeRef = new TypeReference<>() {};
-                      HashMap<String, ByteIterator> document = new HashMap<>();
-                      try {
-                        HashMap<String, HashMap<String, String>> resultMap =
-                            mapper.readValue(new String(next, StandardCharsets.UTF_8), typeRef);
-                        resultMap.entrySet()
-                            .parallelStream()
-                            .forEach(entry -> resultMap.get(entry.getKey()).entrySet()
-                                .parallelStream()
-                                .forEach(item -> document.put(item.getKey(), new StringByteIterator(item.getValue()))));
-                        result.add(document);
-                      } catch (IOException e) {
-                        throw new DecodingFailureException(e);
-                      }
-                    },
-                    error ->
-                    {
-                      LOGGER.debug(error.getMessage(), error);
-                      throw new RuntimeException(error);
-                    }
+                next -> result.add(collection.get(next, getOptions().transcoder(MapTranscoder.INSTANCE))
+                    .contentAs(HashMap.class)),
+                error ->
+                {
+                  LOGGER.debug(error.getMessage(), error);
+                  throw new RuntimeException(error);
+                }
             );
         return Status.OK;
       });

@@ -56,10 +56,10 @@ public class MapTranscoder implements Transcoder {
   public <T> T decode(final Class<T> target, final byte[] input, int flags) {
     if (target.equals(byte[].class)) {
       return (T) input;
-    } else if (target.equals(Map.class)) {
+    } else if (target.equals(Map.class) || target.equals(HashMap.class)) {
       ObjectMapper mapper = new ObjectMapper();
       TypeReference<HashMap<String, String>> typeRef = new TypeReference<>() {};
-      HashMap<String, ByteIterator> result = new HashMap<>();
+      Map<String, ByteIterator> result = new HashMap<>();
       try {
         mapper.readValue(new String(input, StandardCharsets.UTF_8), typeRef).entrySet()
             .parallelStream()
@@ -69,7 +69,7 @@ public class MapTranscoder implements Transcoder {
         throw new DecodingFailureException(e);
       }
     } else {
-      throw new DecodingFailureException("RawJsonTranscoder can only decode into either byte[] or Map!");
+      throw new DecodingFailureException("MapTranscoder can only decode into either byte[] or Map!");
     }
   }
 }
