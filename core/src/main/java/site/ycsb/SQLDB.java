@@ -26,12 +26,12 @@ public abstract class SQLDB {
   public void cleanup() throws DBException {
   }
 
-  public abstract boolean createTable(String tableName,
-                                      Set<String> pkFields,
-                                      Map<String, DataType> tableFields);
+  public abstract Status select(String table, Set<String> fields, String from, String where);
 
-  public abstract boolean addRow(String tableName, JsonObject row);
+  public abstract Status insert(String table, Set<String> fields);
 
-  public abstract JsonObject query(String sql);
+  public abstract Status update(String table, Map<String, String> fields, String where);
+
+  public abstract Status query(String sql);
 
 }
