@@ -81,6 +81,7 @@ public final class CouchbaseConnect {
   private final boolean collectionEnabled;
   private final DurabilityLevel durability;
   private final int ttlSeconds;
+  private boolean communityEdition = false;
 
   /**
    * Builder Class.
@@ -334,6 +335,8 @@ public final class CouchbaseConnect {
     Gson gson = new Gson();
     clusterInfo = gson.fromJson(response.contentAsString(), JsonObject.class);
 
+    communityEdition = !clusterInfo.has("cbasMemoryQuota");
+
     for (JsonElement node : clusterInfo.getAsJsonArray("nodes").asList()) {
       String hostEntry = node.getAsJsonObject().get("hostname").getAsString();
       String[] endpoint = hostEntry.split(":", 2);
@@ -431,7 +434,9 @@ public final class CouchbaseConnect {
 
   public int getIndexReplicaCount() {
     int indexNodes = (int) getIndexNodeCount();
-    if (indexNodes <= 4) {
+    if (communityEdition) {
+      return 0;
+    } else if (indexNodes <= 4) {
       return indexNodes - 1;
     } else {
       return 3;
