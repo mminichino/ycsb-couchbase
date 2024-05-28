@@ -1,4 +1,4 @@
-package site.ycsb.tpch;
+package site.ycsb.tpc;
 
 import java.util.List;
 

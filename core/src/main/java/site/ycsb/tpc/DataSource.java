@@ -1,4 +1,4 @@
-package site.ycsb.tpch;
+package site.ycsb.tpc;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -100,7 +100,16 @@ public class DataSource {
       "need to", "try to"
   };
 
-  private static int lastOlCount = 0;
+  private static final String[] lastNameParts = {
+      "BAR", "OUGHT", "ABLE", "PRI", "PRES", "ESE",
+      "ANTI", "CALLY", "ATION", "EING"
+  };
+
+  private static final int C_255 = randomUniformInt(0, 255);
+  private static final int C_1023 = randomUniformInt(0, 1023);
+  private static final int C_8191 = randomUniformInt(0, 8191);
+
+  private static final int lastOlCount = 0;
 
   public static String tpchText(int length) {
     StringBuilder s = new StringBuilder();
@@ -202,6 +211,24 @@ public class DataSource {
     return round(randomValue, places);
   }
 
+  public static int randomNonUniformInt(int A, int x, int y) {
+    int C;
+    switch (A) {
+      case 255:
+        C = C_255;
+        break;
+      case 1023:
+        C = C_1023;
+        break;
+      case 8191:
+        C = C_8191;
+        break;
+      default:
+        throw new RuntimeException("randomNonUniformInt: unexpected value for A (%d)\n" + A);
+    }
+    return ((((randomUniformInt(0, A) | randomUniformInt(x, y)) + C) % (y - x + 1)) + x);
+  }
+
   public static double round(double value, int places) {
     BigDecimal bd = BigDecimal.valueOf(value);
     bd = bd.setScale(places, RoundingMode.HALF_UP);
@@ -231,7 +258,7 @@ public class DataSource {
     return s.toString();
   }
 
-  public static String addAlphanumericString(int length) {
+  public static String newAlphanumericString64(int length) {
     Base64.Encoder encoder = Base64.getUrlEncoder();
     StringBuilder s = new StringBuilder();
     while (s.length() < length) {
@@ -239,6 +266,37 @@ public class DataSource {
       s.append(encoder.encodeToString(uuid.toString().getBytes()));
     }
     return s.substring(0, length);
+  }
+
+  public static String newAlphanumericString62(int minValue, int maxValue) {
+    String numbers = "0123456789";
+    String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    String lower = "abcdefghijklmnopqrstuvwxyz";
+    String characters = upper + lower + numbers;
+    char[] alphanum = characters.toCharArray();
+    int length = randomUniformInt(minValue, maxValue);
+    int max = alphanum.length - 1;
+
+    StringBuilder string = new StringBuilder();
+    for (int i = 0; i < length; i++) {
+      string.append(alphanum[randomUniformInt(0, max)]);
+    }
+
+    return string.toString();
+  }
+
+  public static String newNumericString62(int minValue, int maxValue) {
+    String numbers = "0123456789";
+    char[] alphanum = numbers.toCharArray();
+    int length = randomUniformInt(minValue, maxValue);
+    int max = alphanum.length - 1;
+
+    StringBuilder string = new StringBuilder();
+    for (int i = 0; i < length; i++) {
+      string.append(alphanum[randomUniformInt(0, max)]);
+    }
+
+    return string.toString();
   }
 
   public static String addTextString(int minLength, int maxLength) {

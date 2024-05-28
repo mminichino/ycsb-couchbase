@@ -1,7 +1,5 @@
-package site.ycsb.tpch;
+package site.ycsb.tpc;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
 import java.io.IOException;
 
 public class TupleGen {
