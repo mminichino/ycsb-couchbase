@@ -1,6 +1,6 @@
 package site.ycsb;
 
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.Properties;
 import java.util.Set;
@@ -26,12 +26,17 @@ public abstract class SQLDB {
   public void cleanup() throws DBException {
   }
 
-  public abstract Status select(String table, Set<String> fields, String from, String where);
+  public abstract Status createTable(String table, Map<String, DataType> columns, Set<String> keys);
 
-  public abstract Status insert(String table, Set<String> fields);
+  public abstract Status dropTable(String table, Map<String, DataType> columns, Set<String> keys);
 
-  public abstract Status update(String table, Map<String, String> fields, String where);
+  public abstract Status select(String table, String statement);
 
-  public abstract Status query(String sql);
+  public abstract Status insert(String table, Record data);
 
+  public abstract Status update(String table, Record data);
+
+  public abstract Status query(String statement);
+
+  public abstract Status delete(String table, String statement);
 }

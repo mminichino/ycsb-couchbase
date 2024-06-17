@@ -5,7 +5,7 @@ import site.ycsb.DataType;
 import java.util.*;
 
 public class Tables {
-  Map<String, DataType> partTableH = new HashMap<>() {{
+  public static Map<String, DataType> partTableH = new HashMap<>() {{
     put("p_partkey", DataType.IDENTIFIER);
     put("p_name", DataType.VARIABLE_STRING.setLength(55));
     put("p_mfgr", DataType.FIXED_STRING.setLength(25));
@@ -16,10 +16,10 @@ public class Tables {
     put("p_retailprice", DataType.FLOAT);
     put("p_comment", DataType.VARIABLE_STRING.setLength(23));
   }};
-  Set<String> partKeysH = new HashSet<>(List.of("p_partkey"));
-  Integer partScaleFactorH = 200000;
+  public static Set<String> partKeysH = new HashSet<>(List.of("p_partkey"));
+  public static Integer partScaleFactorH = 200000;
 
-  Map<String, DataType> supplierTableH = new HashMap<>() {{
+  public static Map<String, DataType> supplierTableH = new HashMap<>() {{
     put("s_suppkey", DataType.IDENTIFIER);
     put("s_name", DataType.FIXED_STRING.setLength(25));
     put("s_address", DataType.VARIABLE_STRING.setLength(40));
@@ -28,20 +28,20 @@ public class Tables {
     put("s_acctbal", DataType.FLOAT);
     put("s_comment", DataType.VARIABLE_STRING.setLength(101));
   }};
-  Set<String> supplierKeysH = new HashSet<>(List.of("s_suppkey"));
-  Integer supplierScaleFactorH = 10000;
+  public static Set<String> supplierKeysH = new HashSet<>(List.of("s_suppkey"));
+  public static Integer supplierScaleFactorH = 10000;
 
-  Map<String, DataType> partSuppTableH = new HashMap<>() {{
+  public static Map<String, DataType> partSuppTableH = new HashMap<>() {{
     put("ps_partkey", DataType.IDENTIFIER);
     put("ps_suppkey", DataType.IDENTIFIER);
     put("ps_availqty", DataType.INTEGER);
     put("ps_supplycost", DataType.FLOAT);
     put("ps_comment", DataType.VARIABLE_STRING.setLength(199));
   }};
-  Set<String> partSuppKeysH = new HashSet<>(List.of("ps_partkey", "ps_suppkey"));
-  Integer partSuppScaleFactorH = 1;
+  public static Set<String> partSuppKeysH = new HashSet<>(List.of("ps_partkey", "ps_suppkey"));
+  public static Integer partSuppScaleFactorH = 1;
 
-  Map<String, DataType> customerTableH = new HashMap<>() {{
+  public static Map<String, DataType> customerTableH = new HashMap<>() {{
     put("c_custkey", DataType.IDENTIFIER);
     put("c_name", DataType.VARIABLE_STRING.setLength(25));
     put("c_address", DataType.VARIABLE_STRING.setLength(40));
@@ -51,10 +51,10 @@ public class Tables {
     put("c_mktsegment", DataType.FIXED_STRING.setLength(10));
     put("c_comment", DataType.VARIABLE_STRING.setLength(117));
   }};
-  Set<String> customerKeysH = new HashSet<>(List.of("c_custkey"));
-  Integer customerScaleFactorH = 150000;
+  public static Set<String> customerKeysH = new HashSet<>(List.of("c_custkey"));
+  public static Integer customerScaleFactorH = 150000;
 
-  Map<String, DataType> ordersTableH = new HashMap<>() {{
+  public static Map<String, DataType> ordersTableH = new HashMap<>() {{
     put("o_orderkey", DataType.IDENTIFIER);
     put("o_custkey", DataType.IDENTIFIER);
     put("o_orderstatus", DataType.FIXED_STRING.setLength(1));
@@ -65,10 +65,10 @@ public class Tables {
     put("o_shippriority", DataType.INTEGER);
     put("o_comment", DataType.VARIABLE_STRING.setLength(79));
   }};
-  Set<String> ordersKeysH = new HashSet<>(List.of("o_orderkey"));
-  Integer ordersScaleFactorH = 1500000;
+  public static Set<String> ordersKeysH = new HashSet<>(List.of("o_orderkey"));
+  public static Integer ordersScaleFactorH = 1500000;
 
-  Map<String, DataType> lineItemTableH = new HashMap<>() {{
+  public static Map<String, DataType> lineItemTableH = new HashMap<>() {{
     put("l_orderkey", DataType.IDENTIFIER);
     put("l_partkey", DataType.IDENTIFIER);
     put("l_suppkey", DataType.IDENTIFIER);
@@ -86,27 +86,27 @@ public class Tables {
     put("l_shipmode", DataType.FIXED_STRING.setLength(10));
     put("l_comment", DataType.VARIABLE_STRING.setLength(44));
   }};
-  Set<String> lineItemKeysH = new HashSet<>(List.of("l_orderkey", "l_linenumber"));
-  Integer lineItemScaleFactorH = 1;
+  public static Set<String> lineItemKeysH = new HashSet<>(List.of("l_orderkey", "l_linenumber"));
+  public static Integer lineItemScaleFactorH = 1;
 
-  Map<String, DataType> nationTableH = new HashMap<>() {{
+  public static Map<String, DataType> nationTableH = new HashMap<>() {{
     put("n_nationkey", DataType.IDENTIFIER);
     put("n_name", DataType.FIXED_STRING.setLength(25));
     put("n_regionkey", DataType.IDENTIFIER);
     put("n_comment", DataType.VARIABLE_STRING.setLength(152));
   }};
-  Set<String> nationKeysH = new HashSet<>(List.of("ps_partkey", "ps_suppkey"));
-  Integer nationScaleFactorH = 1;
+  public static Set<String> nationKeysH = new HashSet<>(List.of("ps_partkey", "ps_suppkey"));
+  public static Integer nationScaleFactorH = 1;
 
-  Map<String, DataType> regionTableH = new HashMap<>() {{
+  public static Map<String, DataType> regionTableH = new HashMap<>() {{
     put("r_regionkey", DataType.IDENTIFIER);
     put("r_name", DataType.FIXED_STRING.setLength(25));
     put("r_comment", DataType.VARIABLE_STRING.setLength(152));
   }};
-  Set<String> regionKeysH = new HashSet<>(List.of("ps_partkey", "ps_suppkey"));
-  Integer regionScaleFactorH = 1;
+  public static Set<String> regionKeysH = new HashSet<>(List.of("ps_partkey", "ps_suppkey"));
+  public static Integer regionScaleFactorH = 1;
 
-  Map<String, DataType> warehouseTableC = new HashMap<>() {{
+  public static Map<String, DataType> warehouseTableC = new HashMap<>() {{
     put("w_id", DataType.IDENTIFIER);
     put("w_name", DataType.VARIABLE_STRING.setLength(10));
     put("w_street_1", DataType.VARIABLE_STRING.setLength(20));
@@ -117,10 +117,10 @@ public class Tables {
     put("w_tax", DataType.FLOAT);
     put("w_ytd", DataType.FLOAT);
   }};
-  Set<String> warehouseKeysC = new HashSet<>(List.of("w_id"));
-  Integer warehouseScaleFactorC = 2;
+  public static Set<String> warehouseKeysC = new HashSet<>(List.of("w_id"));
+  public static Integer warehouseScaleFactorC = 2;
 
-  Map<String, DataType> districtTableC = new HashMap<>() {{
+  public static Map<String, DataType> districtTableC = new HashMap<>() {{
     put("d_id", DataType.IDENTIFIER);
     put("d_w_id", DataType.IDENTIFIER);
     put("d_name", DataType.VARIABLE_STRING.setLength(10));
@@ -133,10 +133,10 @@ public class Tables {
     put("d_ytd", DataType.FLOAT);
     put("d_next_o_id", DataType.FLOAT);
   }};
-  Set<String> districtKeysC = new HashSet<>(List.of("d_id", "d_w_id"));
-  Integer districtScaleFactorC = 10;
+  public static Set<String> districtKeysC = new HashSet<>(List.of("d_id", "d_w_id"));
+  public static Integer districtScaleFactorC = 10;
 
-  Map<String, DataType> customerTableC = new HashMap<>() {{
+  public static Map<String, DataType> customerTableC = new HashMap<>() {{
     put("c_id", DataType.IDENTIFIER);
     put("c_d_id", DataType.IDENTIFIER);
     put("c_w_id", DataType.IDENTIFIER);
@@ -159,10 +159,10 @@ public class Tables {
     put("c_delivery_cnt", DataType.INTEGER);
     put("c_data", DataType.VARIABLE_STRING.setLength(500));
   }};
-  Set<String> customerKeysC = new HashSet<>(List.of("c_id", "c_d_id", "c_w_id"));
-  Integer customerScaleFactorC = 3000;
+  public static Set<String> customerKeysC = new HashSet<>(List.of("c_id", "c_d_id", "c_w_id"));
+  public static Integer customerScaleFactorC = 3000;
 
-  Map<String, DataType> historyTableC = new HashMap<>() {{
+  public static Map<String, DataType> historyTableC = new HashMap<>() {{
     put("h_c_id", DataType.IDENTIFIER);
     put("h_c_d_id", DataType.IDENTIFIER);
     put("h_c_w_id", DataType.IDENTIFIER);
@@ -172,18 +172,18 @@ public class Tables {
     put("h_amount", DataType.FLOAT);
     put("h_data", DataType.VARIABLE_STRING.setLength(24));
   }};
-  Set<String> historyKeysC = new HashSet<>(List.of());
-  Integer historyScaleFactorC = 96000;
+  public static Set<String> historyKeysC = new HashSet<>(List.of());
+  public static Integer historyScaleFactorC = 96000;
 
-  Map<String, DataType> newOrderTableC = new HashMap<>() {{
+  public static Map<String, DataType> newOrderTableC = new HashMap<>() {{
     put("no_o_id", DataType.IDENTIFIER);
     put("no_d_id", DataType.IDENTIFIER);
     put("no_w_id", DataType.IDENTIFIER);
   }};
-  Set<String> newOrderKeysC = new HashSet<>(List.of("no_o_id", "no_d_id", "no_w_id"));
-  Integer newOrderScaleFactorC = 1;
+  public static Set<String> newOrderKeysC = new HashSet<>(List.of("no_o_id", "no_d_id", "no_w_id"));
+  public static Integer newOrderScaleFactorC = 1;
 
-  Map<String, DataType> orderTableC = new HashMap<>() {{
+  public static Map<String, DataType> orderTableC = new HashMap<>() {{
     put("o_id", DataType.IDENTIFIER);
     put("o_d_id", DataType.IDENTIFIER);
     put("o_w_id", DataType.IDENTIFIER);
@@ -193,10 +193,10 @@ public class Tables {
     put("o_ol_cnt", DataType.INTEGER);
     put("o_all_local", DataType.INTEGER);
   }};
-  Set<String> orderKeysC = new HashSet<>(List.of("o_id", "o_d_id", "o_w_id"));
-  Integer orderScaleFactorC = 10000000;
+  public static Set<String> orderKeysC = new HashSet<>(List.of("o_id", "o_d_id", "o_w_id"));
+  public static Integer orderScaleFactorC = 10000000;
 
-  Map<String, DataType> orderLineTableC = new HashMap<>() {{
+  public static Map<String, DataType> orderLineTableC = new HashMap<>() {{
     put("ol_o_id", DataType.IDENTIFIER);
     put("ol_d_id", DataType.IDENTIFIER);
     put("ol_w_id", DataType.IDENTIFIER);
@@ -208,20 +208,20 @@ public class Tables {
     put("ol_amount", DataType.FLOAT);
     put("ol_dist_info", DataType.FIXED_STRING.setLength(24));
   }};
-  Set<String> orderLineKeysC = new HashSet<>(List.of("ol_w_id", "ol_d_id", "ol_o_id", "ol_number"));
-  Integer orderLineScaleFactorC = 10000000;
+  public static Set<String> orderLineKeysC = new HashSet<>(List.of("ol_w_id", "ol_d_id", "ol_o_id", "ol_number"));
+  public static Integer orderLineScaleFactorC = 10000000;
 
-  Map<String, DataType> itemTableC = new HashMap<>() {{
+  public static Map<String, DataType> itemTableC = new HashMap<>() {{
     put("i_id", DataType.IDENTIFIER);
     put("i_im_id", DataType.IDENTIFIER);
     put("i_name", DataType.VARIABLE_STRING.setLength(24));
     put("i_price", DataType.FLOAT);
     put("i_data", DataType.VARIABLE_STRING.setLength(50));
   }};
-  Set<String> itemKeysC = new HashSet<>(List.of("i_id"));
-  Integer itemScaleFactorC = 200000;
+  public static Set<String> itemKeysC = new HashSet<>(List.of("i_id"));
+  public static Integer itemScaleFactorC = 200000;
 
-  Map<String, DataType> stockTableC = new HashMap<>() {{
+  public static Map<String, DataType> stockTableC = new HashMap<>() {{
     put("s_i_id", DataType.IDENTIFIER);
     put("s_w_id", DataType.IDENTIFIER);
     put("s_quantity", DataType.INTEGER);
@@ -240,6 +240,6 @@ public class Tables {
     put("s_remote_cnt", DataType.INTEGER);
     put("s_data", DataType.VARIABLE_STRING.setLength(50));
   }};
-  Set<String> stockKeysC = new HashSet<>(List.of("s_w_id", "s_i_id"));
-  Integer stockScaleFactorC = 200000;
+  public static Set<String> stockKeysC = new HashSet<>(List.of("s_w_id", "s_i_id"));
+  public static Integer stockScaleFactorC = 200000;
 }

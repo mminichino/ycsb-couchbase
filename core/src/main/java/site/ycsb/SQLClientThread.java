@@ -111,9 +111,9 @@ public class SQLClientThread implements Runnable {
       long startTimeNanos = System.nanoTime();
       if (runMode) {
 
-        while (((opcount == 0) || (opsDone < opcount)) && !workload.isStopRequested()) {
+        while (((opcount == 0) || (opsDone < opcount)) && workload.workloadRunState()) {
 
-          if (!workload.doTransaction(db, workloadState)) {
+          if (!workload.run(db, workloadState)) {
             break;
           }
 
@@ -123,9 +123,9 @@ public class SQLClientThread implements Runnable {
         }
       } else {
 
-        while (((opcount == 0) || (opsDone < opcount)) && !workload.isStopRequested()) {
+        while (((opcount == 0) || (opsDone < opcount)) && workload.workloadRunState()) {
 
-          if (!workload.dataLoad(db, workloadState)) {
+          if (!workload.load(db, workloadState)) {
             break;
           }
 
