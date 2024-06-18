@@ -3,6 +3,8 @@ package site.ycsb.tpc;
 import site.ycsb.SQLDB;
 import site.ycsb.Record;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Properties;
 
 public class TPCCLoad {
@@ -294,11 +296,7 @@ public class TPCCLoad {
       if (enableDebug)
         System.out.printf("DID = %d, WID = %d, Name = %s, Tax = %f\n",
             d_id, d_w_id, d_name, d_tax);
-
     }
-
-    districtLoader.close();
-
   }
 
   public static void loadCustomer(SQLDB db, int d_id, int w_id) {
@@ -314,171 +312,107 @@ public class TPCCLoad {
     String c_state = null;
     String c_zip = null;
     String c_phone = null;
-//        String c_since = null;
     String c_credit = null;
-
     int c_credit_lim = 0;
     float c_discount = 0;
     float c_balance = 0;
     String c_data = null;
-
     double h_amount = 0.0;
-
     String h_data = null;
-//        //boolean retried = false;
 
     System.out.printf("Loading Customer for DID=%d, WID=%d\n", d_id, w_id);
-    int currentShard = 0;
-    if (shardCount > 0) {
-      currentShard = (w_id % shardCount);
-      if (currentShard == 0) {
-        currentShard = shardCount;
-      }
-    }
 
-    final String[] CUSTOMER_COLUMNS = {
-        "c_id", "c_d_id", "c_w_id", "c_first", "c_middle", "c_last", "c_street_1", "c_street_2", "c_city",
-        "c_state", "c_zip", "c_phone", "c_since", "c_credit", "c_credit_lim",
-        "c_discount", "c_balance", "c_ytd_payment", "c_payment_cnt", "c_delivery_cnt", "c_data"
-    };
-    final Record customerRecord = new Record(21);
-    final RecordLoader customerLoader = loadConfig.createLoader("customer", CUSTOMER_COLUMNS);
+    db.createTable("customer", Tables.customerTableC, Tables.customerKeysC);
+    db.createTable("history", Tables.historyTableC, Tables.historyKeysC);
 
-    final String[] HISTORY_COLUMN_NAME = {
-        "h_c_id", "h_c_d_id", "h_c_w_id", "h_d_id", "h_w_id", "h_date", "h_amount", "h_data"
-    };
-    final Record historyRecord = new Record(8);
-    final RecordLoader historyLoader = loadConfig.createLoader("history", HISTORY_COLUMN_NAME);
+    for (c_id = 1; c_id <= custPerDist; c_id++) {
+      c_d_id = d_id;
+      c_w_id = w_id;
 
-    if ((currentShard == shardId) || (shardId == 0)) {
-      //retry:
-//            if (retried)
-//                System.out.printf("Retrying ...\n");
-//            retried = true;
-      for (c_id = 1; c_id <= CUST_PER_DIST; c_id++) {
+      c_first = TPCCUtil.makeAlphaString(8, 16);
+      c_middle = "O" + "E";
 
-        /* Generate Customer Data */
-        c_d_id = d_id;
-        c_w_id = w_id;
-
-        c_first = Util.makeAlphaString(8, 16);
-        c_middle = "O" + "E";
-
-        if (c_id <= 1000) {
-          c_last = Util.lastName(c_id - 1);
-        } else {
-          c_last = Util.lastName(Util.nuRand(255, 0, 999));
-        }
-
-        c_street_1 = Util.makeAlphaString(10, 20);
-        c_street_2 = Util.makeAlphaString(10, 20);
-        c_city = Util.makeAlphaString(10, 20);
-        c_state = Util.makeAlphaString(2, 2);
-        c_zip = Util.makeAlphaString(9, 9);
-
-        c_phone = Util.makeNumberString(16, 16);
-
-        if (Util.randomNumber(0, 1) == 1)
-          c_credit = "G";
-        else
-          c_credit = "B";
-        c_credit += "C";
-
-        c_credit_lim = 50000;
-        c_discount = (float) (((float) Util.randomNumber(0, 50)) / 100.0);
-        c_balance = (float) -10.0;
-
-        c_data = Util.makeAlphaString(300, 500);
-        //gettimestamp(datetime, STRFTIME_FORMAT, TIMESTAMP_LEN); Java Equivalent below?
-        Calendar calendar = Calendar.getInstance();
-        //Date now = calendar.getTime();
-        //Timestamp currentTimeStamp = new Timestamp(now.getTime());
-        Date date = new java.sql.Date(calendar.getTimeInMillis());
-                /*EXEC SQL INSERT INTO
-                                        customer
-                                        values(:c_id,:c_d_id,:c_w_id,
-                                  :c_first,:c_middle,:c_last,
-                                  :c_street_1,:c_street_2,:c_city,:c_state,
-                                  :c_zip,
-                                      :c_phone, :timestamp,
-                                  :c_credit,
-                                  :c_credit_lim,:c_discount,:c_balance,
-                                  10.0, 1, 0,:c_data);*/
-        try {
-
-
-          customerRecord.reset();
-          customerRecord.add(c_id);
-          customerRecord.add(c_d_id);
-          customerRecord.add(c_w_id);
-          customerRecord.add(c_first);
-          customerRecord.add(c_middle);
-          customerRecord.add(c_last);
-          customerRecord.add(c_street_1);
-          customerRecord.add(c_street_2);
-          customerRecord.add(c_city);
-          customerRecord.add(c_state);
-          customerRecord.add(c_zip);
-          customerRecord.add(c_phone);
-          customerRecord.add(date);
-          customerRecord.add(c_credit);
-          customerRecord.add(c_credit_lim);
-          customerRecord.add(c_discount);
-          customerRecord.add(c_balance);
-          customerRecord.add(10.0);
-          customerRecord.add(1);
-          customerRecord.add(0);
-          customerRecord.add(c_data);
-
-          customerLoader.load(customerRecord);
-
-        } catch (Exception e) {
-          throw new RuntimeException("Customer insert error", e);
-        }
-
-        h_amount = 10.0;
-
-        h_data = Util.makeAlphaString(12, 24);
-
-                /*EXEC SQL INSERT INTO
-                                        history
-                                        values(:c_id,:c_d_id,:c_w_id,
-                                       :c_d_id,:c_w_id, :timestamp,
-                                       :h_amount,:h_data);*/
-        try {
-
-          historyRecord.reset();
-          historyRecord.add(c_id);
-          historyRecord.add(c_d_id);
-          historyRecord.add(c_w_id);
-          historyRecord.add(c_d_id);
-          historyRecord.add(c_w_id);
-          historyRecord.add(date);
-          historyRecord.add(h_amount);
-          historyRecord.add(h_data);
-
-          historyLoader.load(historyRecord);
-
-        } catch (Exception e) {
-          throw new RuntimeException("Insert into History error", e);
-        }
-        if (optionDebug) {
-          System.out.printf("CID = %d, LST = %s, P# = %s\n",
-              c_id, c_last, c_phone);
-        }
-        if ((c_id % 100) == 0) {
-          System.out.printf(".");
-          if ((c_id % 1000) == 0)
-            System.out.printf(" %d\n", c_id);
-        }
+      if (c_id <= 1000) {
+        c_last = TPCCUtil.lastName(c_id - 1);
+      } else {
+        c_last = TPCCUtil.lastName(TPCCUtil.nuRand(255, 0, 999));
       }
 
+      c_street_1 = TPCCUtil.makeAlphaString(10, 20);
+      c_street_2 = TPCCUtil.makeAlphaString(10, 20);
+      c_city = TPCCUtil.makeAlphaString(10, 20);
+      c_state = TPCCUtil.makeAlphaString(2, 2);
+      c_zip = TPCCUtil.makeAlphaString(9, 9);
+
+      c_phone = TPCCUtil.makeNumberString(16, 16);
+
+      if (TPCCUtil.randomNumber(0, 1) == 1)
+        c_credit = "G";
+      else
+        c_credit = "B";
+      c_credit += "C";
+
+      c_credit_lim = 50000;
+      c_discount = (float) (((float) TPCCUtil.randomNumber(0, 50)) / 100.0);
+      c_balance = (float) -10.0;
+
+      c_data = TPCCUtil.makeAlphaString(300, 500);
+
+      String dateFormat = "yy-MM-dd'T'HH:mm:ss";
+      SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+      String date = timeStampFormat.format(new Date());
+
+      try {
+        Record record = new Record();
+        record.add("c_id", c_id);
+        record.add("c_d_id", c_d_id);
+        record.add("c_w_id", c_w_id);
+        record.add("c_first", c_first);
+        record.add("c_middle", c_middle);
+        record.add("c_last", c_last);
+        record.add("c_street_1", c_street_1);
+        record.add("c_street_2", c_street_2);
+        record.add("c_city", c_city);
+        record.add("c_state", c_state);
+        record.add("c_zip", c_zip);
+        record.add("c_phone", c_phone);
+        record.add("date", date);
+        record.add("c_credit", c_credit);
+        record.add("c_credit_lim", c_credit_lim);
+        record.add("c_discount", c_discount);
+        record.add("c_balance", c_balance);
+        record.add("c_ytd_payment", 10.0);
+        record.add("c_payment_cnt", 1);
+        record.add("c_delivery_cnt", 0);
+        record.add("c_data", c_data);
+        db.insert("customer", record);
+      } catch (Exception e) {
+        throw new RuntimeException("Customer insert error", e);
+      }
+
+      h_amount = 10.0;
+      h_data = TPCCUtil.makeAlphaString(12, 24);
+
+      try {
+        Record record = new Record();
+        record.add("h_c_id", c_id);
+        record.add("h_c_d_id", c_d_id);
+        record.add("h_c_w_id", c_w_id);
+        record.add("h_d_id", c_d_id);
+        record.add("h_w_id", c_w_id);
+        record.add("h_date", date);
+        record.add("h_amount", h_amount);
+        record.add("h_data", h_data);
+        db.insert("history", record);
+      } catch (Exception e) {
+        throw new RuntimeException("Insert into History error", e);
+      }
+      if (enableDebug) {
+        System.out.printf("CID = %d, LST = %s, P# = %s\n",
+            c_id, c_last, c_phone);
+      }
     }
-
-    customerLoader.close();
-    historyLoader.close();
-
-    System.out.printf("Customer Done.\n");
+    System.out.println("Customer Done");
   }
 
   public static void loadOrders(SQLDB db, int d_id, int w_id) {
@@ -494,180 +428,104 @@ public class TPCCLoad {
     int ol_quantity;
     float ol_amount;
     String ol_dist_info;
-
-    //TODO: shouldn't these variables be used?
-//        float i_price;
-//        float c_discount;
-
     float tmp_float;
 
-    int currentShard = 0;
-    if (shardCount > 0) {
-      currentShard = (w_id % shardCount);
-      if (currentShard == 0) {
-        currentShard = shardCount;
+    db.createTable("orders", Tables.orderTableC, Tables.orderKeysC);
+    db.createTable("new_orders", Tables.newOrderTableC, Tables.newOrderKeysC);
+    db.createTable("order_line", Tables.orderLineTableC, Tables.orderLineKeysC);
+
+    System.out.printf("Loading Orders for D=%d, W=%d\n", d_id, w_id);
+    o_d_id = d_id;
+    o_w_id = w_id;
+    TPCCUtil.initPermutation(custPerDist, ordPerDist);
+    for (o_id = 1; o_id <= ordPerDist; o_id++) {
+      o_c_id = TPCCUtil.getPermutation(ordPerDist);
+      o_carrier_id = TPCCUtil.randomNumber(1, 10);
+      o_ol_cnt = TPCCUtil.randomNumber(5, 15);
+
+      String dateFormat = "yy-MM-dd'T'HH:mm:ss";
+      SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+      String date = timeStampFormat.format(new Date());
+
+      if (o_id > 2100) {
+        Record record = new Record();
+        record.add("o_id", o_id);
+        record.add("o_d_id", o_d_id);
+        record.add("o_w_id", o_w_id);
+        record.add("o_c_id", o_c_id);
+        record.add("o_entry_d", date);
+        record.add("o_carrier_id");
+        record.add("o_ol_cnt", o_ol_cnt);
+        record.add("o_all_local", 1);
+        db.insert("orders", record);
+
+        record = new Record();
+        record.add("no_o_id", o_id);
+        record.add("no_d_id", o_d_id);
+        record.add("no_w_id", o_w_id);
+        db.insert("new_orders", record);
+      } else {
+        Record record = new Record();
+        record.add("o_id", o_id);
+        record.add("o_d_id", o_d_id);
+        record.add("o_w_id", o_w_id);
+        record.add("o_c_id", o_c_id);
+        record.add("o_entry_d", date);
+        record.add("o_carrier_id", o_carrier_id);
+        record.add("o_ol_cnt", o_ol_cnt);
+        record.add("o_all_local", 1);
+        db.insert("orders", record);
       }
-    }
 
-    final String ORDERS_COLUMN_NAME[] = {"o_id", "o_d_id", "o_w_id", "o_c_id", "o_entry_d", "o_carrier_id", "o_ol_cnt", "o_all_local"};
-    final Record orderRecord = new Record(8);
-    final RecordLoader orderLoader = loadConfig.createLoader("orders", ORDERS_COLUMN_NAME);
+      if (enableDebug)
+        System.out.printf("OID = %d, CID = %d, DID = %d, WID = %d\n",
+            o_id, o_c_id, o_d_id, o_w_id);
 
-    final String NEW_ORDERS_COLUMN_NAMES[] = {"no_o_id", "no_d_id", "no_w_id"};
-    final Record newOrderRecord = new Record(3);
-    final RecordLoader newOrderLoader = loadConfig.createLoader("new_orders", NEW_ORDERS_COLUMN_NAMES);
+      for (ol = 1; ol <= o_ol_cnt; ol++) {
+        ol_i_id = TPCCUtil.randomNumber(1, maxItems);
+        ol_supply_w_id = o_w_id;
+        ol_quantity = 5;
+        ol_amount = (float) 0.0;
 
-    final String ORDER_LINE_COLUMN_NAME[] = {"ol_o_id", "ol_d_id", "ol_w_id", "ol_number", "ol_i_id", "ol_supply_w_id", "ol_delivery_d", "ol_quantity", "ol_amount", "ol_dist_info"};
-    final Record orderLineRecord = new Record(10);
-    final RecordLoader orderLineLoader = loadConfig.createLoader("order_line", ORDER_LINE_COLUMN_NAME);
+        ol_dist_info = TPCCUtil.makeAlphaString(24, 24);
 
-    if ((currentShard == shardId) || (shardId == 0)) {
-      System.out.printf("Loading Orders for D=%d, W=%d\n", d_id, w_id);
-      o_d_id = d_id;
-      o_w_id = w_id;
-      Util.initPermutation();    /* initialize permutation of customer numbers */
-      for (o_id = 1; o_id <= ORD_PER_DIST; o_id++) {
+        tmp_float = (float) ((float) (TPCCUtil.randomNumber(10, 10000)) / 100.0);
 
-        /* Generate Order Data */
-        o_c_id = Util.getPermutation();
-        o_carrier_id = Util.randomNumber(1, 10);
-        o_ol_cnt = Util.randomNumber(5, 15);
-
-        //gettimestamp(datetime, STRFTIME_FORMAT, TIMESTAMP_LEN); Java Equivalent below?
-        Date date = new java.sql.Date(System.currentTimeMillis());
-
-
-        if (o_id > 2100) {    /* the last 900 orders have not been
-         * delivered) */
-                    /*EXEC SQL INSERT INTO
-                                         orders
-                                         values(:o_id,:o_d_id,:o_w_id,:o_c_id,
-                                        :timestamp,
-                                        NULL,:o_ol_cnt, 1);*/
-
-          orderRecord.reset();
-          orderRecord.add(o_id);
-          orderRecord.add(o_d_id);
-          orderRecord.add(o_w_id);
-          orderRecord.add(o_c_id);
-          orderRecord.add(date);
-          orderRecord.add(null);
-          orderRecord.add(o_ol_cnt);
-          orderRecord.add(1);
-
-          orderLoader.load(orderRecord);
-
-
-                    /*EXEC SQL INSERT INTO
-                                         new_orders
-                                         values(:o_id,:o_d_id,:o_w_id);*/
-          newOrderRecord.reset();
-          newOrderRecord.add(o_id);
-          newOrderRecord.add(o_d_id);
-          newOrderRecord.add(o_w_id);
-
-          newOrderLoader.load(newOrderRecord);
-
+        if (o_id > 2100) {
+          Record record = new Record();
+          record.add("ol_o_id", o_id);
+          record.add("ol_d_id", o_d_id);
+          record.add("ol_w_id", o_w_id);
+          record.add("ol_number", ol);
+          record.add("ol_i_id", ol_i_id);
+          record.add("ol_supply_w_id", ol_supply_w_id);
+          record.add("ol_delivery_d");
+          record.add("ol_quantity", ol_quantity);
+          record.add("ol_amount", ol_amount);
+          record.add("ol_dist_info", ol_dist_info);
+          db.insert("order_line", record);
         } else {
-                    /*EXEC SQL INSERT INTO
-                             orders
-                             values(:o_id,:o_d_id,:o_w_id,:o_c_id,
-                                :timestamp,
-                                :o_carrier_id,:o_ol_cnt, 1);*/
-          orderRecord.reset();
-          orderRecord.add(o_id);
-          orderRecord.add(o_d_id);
-          orderRecord.add(o_w_id);
-          orderRecord.add(o_c_id);
-          orderRecord.add(date);
-          orderRecord.add(o_carrier_id);
-          orderRecord.add(o_ol_cnt);
-          orderRecord.add(1);
-
-          orderLoader.load(orderRecord);
-
+          Record record = new Record();
+          record.add("ol_o_id", o_id);
+          record.add("ol_d_id", o_d_id);
+          record.add("ol_w_id", o_w_id);
+          record.add("ol_number", ol);
+          record.add("ol_i_id", ol_i_id);
+          record.add("ol_supply_w_id", ol_supply_w_id);
+          record.add("ol_delivery_d", date);
+          record.add("ol_quantity", ol_quantity);
+          record.add("ol_amount", tmp_float);
+          record.add("ol_dist_info", ol_dist_info);
+          db.insert("order_line", record);
         }
 
-
-        if (optionDebug)
-          System.out.printf("OID = %d, CID = %d, DID = %d, WID = %d\n",
-              o_id, o_c_id, o_d_id, o_w_id);
-
-        for (ol = 1; ol <= o_ol_cnt; ol++) {
-          /* Generate Order Line Data */
-          ol_i_id = Util.randomNumber(1, MAXITEMS);
-          ol_supply_w_id = o_w_id;
-          ol_quantity = 5;
-          ol_amount = (float) 0.0;
-
-          ol_dist_info = Util.makeAlphaString(24, 24);
-
-          tmp_float = (float) ((float) (Util.randomNumber(10, 10000)) / 100.0);
-
-          if (o_id > 2100) {
-                        /*EXEC SQL INSERT INTO
-                                              order_line
-                                              values(:o_id,:o_d_id,:o_w_id,:ol,
-                                             :ol_i_id,:ol_supply_w_id, NULL,
-                                             :ol_quantity,:ol_amount,:ol_dist_info);*/
-            orderLineRecord.reset();
-            orderLineRecord.add(o_id);
-            orderLineRecord.add(o_d_id);
-            orderLineRecord.add(o_w_id);
-            orderLineRecord.add(ol);
-            orderLineRecord.add(ol_i_id);
-            orderLineRecord.add(ol_supply_w_id);
-            orderLineRecord.add(null);
-            orderLineRecord.add(ol_quantity);
-            orderLineRecord.add(ol_amount);
-            orderLineRecord.add(ol_dist_info);
-
-            orderLineLoader.load(orderLineRecord);
-
-          } else {
-                        /*EXEC SQL INSERT INTO
-                                  order_line
-                                  values(:o_id,:o_d_id,:o_w_id,:ol,
-                                     :ol_i_id,:ol_supply_w_id,
-                                     :timestamp,
-                                     :ol_quantity,:tmp_float,:ol_dist_info);*/
-            orderLineRecord.reset();
-            orderLineRecord.add(o_id);
-            orderLineRecord.add(o_d_id);
-            orderLineRecord.add(o_w_id);
-            orderLineRecord.add(ol);
-            orderLineRecord.add(ol_i_id);
-            orderLineRecord.add(ol_supply_w_id);
-            orderLineRecord.add(date);
-            orderLineRecord.add(ol_quantity);
-            orderLineRecord.add(tmp_float);
-            orderLineRecord.add(ol_dist_info);
-
-            orderLineLoader.load(orderLineRecord);
-
-          }
-
-          if (optionDebug) {
-            System.out.printf("OL = %d, IID = %d, QUAN = %d, AMT = %f\n",
-                ol, ol_i_id, ol_quantity, ol_amount);
-          }
-
-        }
-        if ((o_id % 100) == 0) {
-          System.out.printf(".");
-
-          if ((o_id % 1000) == 0) {
-            System.out.printf(" %d\n", o_id);
-          }
+        if (enableDebug) {
+          System.out.printf("OL = %d, IID = %d, QUAN = %d, AMT = %f\n",
+              ol, ol_i_id, ol_quantity, ol_amount);
         }
       }
-
-      orderLoader.close();
-      orderLineLoader.close();
-      newOrderLoader.close();
     }
 
-
-    System.out.printf("Orders Done.\n");
+    System.out.println("Orders Done");
   }
 }

@@ -2,6 +2,7 @@ package site.ycsb;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.commons.lang3.ObjectUtils;
 
 public class Record {
   private final ObjectNode data;
@@ -37,6 +38,10 @@ public class Record {
 
   public void add(String field, String value) {
     this.data.put(field, value);
+  }
+
+  public void add(String field) {
+    this.data.putNull(field);
   }
 
   public ObjectNode contents() {
