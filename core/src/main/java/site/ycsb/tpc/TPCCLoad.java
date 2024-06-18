@@ -136,11 +136,11 @@ public class TPCCLoad {
     }
   }
 
-  public static void loadCust(TpccLoadConfig loadConfig, int shardCount, int min_ware, int max_ware, int shardId) {
+  public static void loadCust(SQLDB db, int min_ware, int max_ware) {
     try {
       for (int w_id = min_ware; w_id <= max_ware; w_id++) {
-        for (int d_id = 1; d_id <= DIST_PER_WARE; d_id++) {
-          loadCustomer(loadConfig, d_id, w_id, shardCount, shardId);
+        for (int d_id = 1; d_id <= distPerWarehouse; d_id++) {
+          loadCustomer(db, d_id, w_id);
         }
       }
     } catch (Exception e) {
@@ -148,20 +148,11 @@ public class TPCCLoad {
     }
   }
 
-  /*
-   * ==================================================================+ |
-   * ROUTINE NAME |      LoadOrd | DESCRIPTION |      Loads the Orders and
-   * Order_Line Tables | ARGUMENTS |      none
-   * +==================================================================
-   */
-  public static void loadOrd(TpccLoadConfig loadConfig, int shardCount, int max_ware, int shardId) {
+  public static void loadOrd(SQLDB db, int max_ware) {
     try {
-      // for each warehouse
       for (int w_id = 1; w_id <= max_ware; w_id++) {
-        // for each district
-        for (int d_id = 1; d_id <= DIST_PER_WARE; d_id++) {
-          // generate orders
-          loadOrders(loadConfig, d_id, w_id, shardCount, shardId);
+        for (int d_id = 1; d_id <= distPerWarehouse; d_id++) {
+          loadOrders(db, d_id, w_id);
         }
       }
     } catch (Exception e) {
@@ -170,7 +161,6 @@ public class TPCCLoad {
   }
 
   public static void stock(SQLDB db, int w_id) {
-
     int s_i_id = 0;
     int s_w_id = 0;
     int s_quantity = 0;
@@ -187,104 +177,72 @@ public class TPCCLoad {
     String s_dist_10 = null;
     String s_data = null;
 
-    //int sdatasize = 0;
-    int[] orig = new int[MAXITEMS + 1];
+    int[] orig = new int[maxItems + 1];
     int pos = 0;
     int i = 0;
     boolean error = false;
 
-    final String STOCK_COLUMN_NAME[] = {"s_i_id", " s_w_id", " s_quantity", " " +
-        "s_dist_01", " s_dist_02", " s_dist_03", " s_dist_04", " s_dist_05", " s_dist_06", " " +
-        "s_dist_07", " s_dist_08", " s_dist_09", " s_dist_10", " s_ytd", " s_order_cnt", " " +
-        "s_remote_cnt", " s_data"
-    };
+    db.createTable("stock", Tables.stockTableC, Tables.stockKeysC);
 
-    final Record stockRecord = new Record(17);
-    RecordLoader stockLoader = loadConfig.createLoader("stock", STOCK_COLUMN_NAME);
-
-    /* EXEC SQL WHENEVER SQLERROR GOTO sqlerr;*/
     System.out.printf("Loading Stock Wid=%d\n", w_id);
     s_w_id = w_id;
 
-    for (i = 0; i < MAXITEMS / 10; i++) {
+    for (i = 0; i < maxItems / 10; i++) {
       orig[i] = 0;
     }
 
-    for (i = 0; i < MAXITEMS / 10; i++) {
+    for (i = 0; i < maxItems / 10; i++) {
       do {
-        pos = Util.randomNumber(0, MAXITEMS);
+        pos = TPCCUtil.randomNumber(0, maxItems);
       } while (orig[pos] != 0); //TODO: FIx later
       orig[pos] = 1;
     }
 
-    ////retry:
-    for (s_i_id = 1; s_i_id <= MAXITEMS; s_i_id++) {
+    for (s_i_id = 1; s_i_id <= maxItems; s_i_id++) {
+      s_quantity = TPCCUtil.randomNumber(10, 100);
 
-      /* Generate Stock Data */
-      s_quantity = Util.randomNumber(10, 100);
+      s_dist_01 = TPCCUtil.makeAlphaString(24, 24);
+      s_dist_02 = TPCCUtil.makeAlphaString(24, 24);
+      s_dist_03 = TPCCUtil.makeAlphaString(24, 24);
+      s_dist_04 = TPCCUtil.makeAlphaString(24, 24);
+      s_dist_05 = TPCCUtil.makeAlphaString(24, 24);
+      s_dist_06 = TPCCUtil.makeAlphaString(24, 24);
+      s_dist_07 = TPCCUtil.makeAlphaString(24, 24);
+      s_dist_08 = TPCCUtil.makeAlphaString(24, 24);
+      s_dist_09 = TPCCUtil.makeAlphaString(24, 24);
+      s_dist_10 = TPCCUtil.makeAlphaString(24, 24);
 
-      s_dist_01 = Util.makeAlphaString(24, 24);
-      s_dist_02 = Util.makeAlphaString(24, 24);
-      s_dist_03 = Util.makeAlphaString(24, 24);
-      s_dist_04 = Util.makeAlphaString(24, 24);
-      s_dist_05 = Util.makeAlphaString(24, 24);
-      s_dist_06 = Util.makeAlphaString(24, 24);
-      s_dist_07 = Util.makeAlphaString(24, 24);
-      s_dist_08 = Util.makeAlphaString(24, 24);
-      s_dist_09 = Util.makeAlphaString(24, 24);
-      s_dist_10 = Util.makeAlphaString(24, 24);
+      s_data = TPCCUtil.makeAlphaString(26, 50);
 
-
-      s_data = Util.makeAlphaString(26, 50);
-      //sdatasize = s_data.length();
-      if (orig[s_i_id] != 0) {//TODO:Change this later
-        //pos = Util.randomNumber(0, sdatasize - 8);
+      if (orig[s_i_id] != 0) {
         s_data = "original";
       }
-            /*EXEC SQL INSERT INTO
-                               stock
-                               values(:s_i_id,:s_w_id,:s_quantity,
-                              :s_dist_01,:s_dist_02,:s_dist_03,:s_dist_04,:s_dist_05,
-                              :s_dist_06,:s_dist_07,:s_dist_08,:s_dist_09,:s_dist_10,
-                              0, 0, 0,:s_data);*/
 
-      stockRecord.reset();
-      stockRecord.add(s_i_id);
-      stockRecord.add(s_w_id);
-      stockRecord.add(s_quantity);
-      stockRecord.add(s_dist_01);
-      stockRecord.add(s_dist_02);
-      stockRecord.add(s_dist_03);
-      stockRecord.add(s_dist_04);
-      stockRecord.add(s_dist_05);
-      stockRecord.add(s_dist_06);
-      stockRecord.add(s_dist_07);
-      stockRecord.add(s_dist_08);
-      stockRecord.add(s_dist_09);
-      stockRecord.add(s_dist_10);
-      stockRecord.add(0);
-      stockRecord.add(0);
-      stockRecord.add(0);
-      stockRecord.add(s_data);
+      Record record = new Record();
+      record.add("s_i_id", s_i_id);
+      record.add("s_w_id", s_w_id);
+      record.add("s_quantity", s_quantity);
+      record.add("s_dist_01", s_dist_01);
+      record.add("s_dist_02", s_dist_02);
+      record.add("s_dist_03", s_dist_03);
+      record.add("s_dist_04", s_dist_04);
+      record.add("s_dist_05", s_dist_05);
+      record.add("s_dist_06", s_dist_06);
+      record.add("s_dist_07", s_dist_07);
+      record.add("s_dist_08", s_dist_08);
+      record.add("s_dist_09", s_dist_09);
+      record.add("s_dist_10", s_dist_10);
+      record.add("s_ytd", 0);
+      record.add("s_order_cnt", 0);
+      record.add("s_remote_cnt", 0);
+      record.add("s_data", s_data);
+      db.insert("stock", record);
 
-      stockLoader.load(stockRecord);
-
-      if (optionDebug)
-        System.out.printf("SID = %d, WID = %d, Quan = %d\n",
-            s_i_id, s_w_id, s_quantity);
-
-      if ((s_i_id % 100) == 0) {
-        System.out.printf(".");
-        if ((s_i_id % 5000) == 0)
-          System.out.printf(" %d\n", s_i_id);
-      }
+      if (enableDebug)
+        System.out.printf("SID = %d, WID = %d, Quan = %d\n", s_i_id, s_w_id, s_quantity);
     }
 
-    stockLoader.close();
-
-    System.out.printf(" Stock Done.\n");
-    return error;
-
+    System.out.println("Stock Done");
   }
 
   public static void district(SQLDB db, int w_id) {
@@ -301,51 +259,39 @@ public class TPCCLoad {
     int d_next_o_id;
     boolean error = false;
 
-    System.out.printf("Loading District\n");
+    System.out.println("Loading District");
+
     d_w_id = w_id;
     d_ytd = (float) 30000.0;
     d_next_o_id = 3001;
 
-    final String[] DISTRICT_COLUMN_NAME = {"d_id", " d_w_id", " d_name", " d_street_1", " d_street_2", " d_city", " d_state", " d_zip", " d_tax", " d_ytd", " d_next_o_id"};
-    final Record districtRecord = new Record(11);
-    final RecordLoader districtLoader = loadConfig.createLoader("district", DISTRICT_COLUMN_NAME);
+    db.createTable("district", Tables.districtTableC, Tables.districtKeysC);
 
-    //retry:
-    for (d_id = 1; d_id <= DIST_PER_WARE; d_id++) {
+    for (d_id = 1; d_id <= distPerWarehouse; d_id++) {
+      d_name = TPCCUtil.makeAlphaString(6, 10);
+      d_street_1 = TPCCUtil.makeAlphaString(10, 20);
+      d_street_2 = TPCCUtil.makeAlphaString(10, 20);
+      d_city = TPCCUtil.makeAlphaString(10, 20);
+      d_state = TPCCUtil.makeAlphaString(2, 2);
+      d_zip = TPCCUtil.makeAlphaString(9, 9);
 
-      /* Generate District Data */
+      d_tax = (float) (((float) TPCCUtil.randomNumber(10, 20)) / 100.0);
 
-      d_name = Util.makeAlphaString(6, 10);
-      d_street_1 = Util.makeAlphaString(10, 20);
-      d_street_2 = Util.makeAlphaString(10, 20);
-      d_city = Util.makeAlphaString(10, 20);
-      d_state = Util.makeAlphaString(2, 2);
-      d_zip = Util.makeAlphaString(9, 9);
+      Record record = new Record();
+      record.add("d_id", d_id);
+      record.add("d_w_id", d_w_id);
+      record.add("d_name", d_name);
+      record.add("d_street_1", d_street_1);
+      record.add("d_street_2", d_street_2);
+      record.add("d_city", d_city);
+      record.add("d_state", d_state);
+      record.add("d_zip", d_zip);
+      record.add("d_tax", d_tax);
+      record.add("d_ytd", d_ytd);
+      record.add("d_next_o_id", d_next_o_id);
+      db.insert("district", record);
 
-      d_tax = (float) (((float) Util.randomNumber(10, 20)) / 100.0);
-
-            /*EXEC SQL INSERT INTO
-                               district
-                               values(:d_id,:d_w_id,:d_name,
-                              :d_street_1,:d_street_2,:d_city,:d_state,:d_zip,
-                              :d_tax,:d_ytd,:d_next_o_id);*/
-
-      districtRecord.reset();
-      districtRecord.add(d_id);
-      districtRecord.add(d_w_id);
-      districtRecord.add(d_name);
-      districtRecord.add(d_street_1);
-      districtRecord.add(d_street_2);
-      districtRecord.add(d_city);
-      districtRecord.add(d_state);
-      districtRecord.add(d_zip);
-      districtRecord.add(d_tax);
-      districtRecord.add(d_ytd);
-      districtRecord.add(d_next_o_id);
-
-      districtLoader.load(districtRecord);
-
-      if (optionDebug)
+      if (enableDebug)
         System.out.printf("DID = %d, WID = %d, Name = %s, Tax = %f\n",
             d_id, d_w_id, d_name, d_tax);
 
@@ -355,14 +301,7 @@ public class TPCCLoad {
 
   }
 
-  /*
-   * ==================================================================+ |
-   * ROUTINE NAME |      Customer | DESCRIPTION |      Loads Customer Table |
-   * Also inserts corresponding history record | ARGUMENTS |      id   -
-   * customer id |      d_id - district id |      w_id - warehouse id
-   * +==================================================================
-   */
-  public static void loadCustomer(TpccLoadConfig loadConfig, int d_id, int w_id, int shardCount, int shardId) throws Exception {
+  public static void loadCustomer(SQLDB db, int d_id, int w_id) {
     int c_id = 0;
     int c_d_id = 0;
     int c_w_id = 0;
@@ -542,14 +481,7 @@ public class TPCCLoad {
     System.out.printf("Customer Done.\n");
   }
 
-  /*
-   * ==================================================================+ |
-   * ROUTINE NAME |      Orders | DESCRIPTION |      Loads the Orders table |
-   * Also loads the Order_Line table on the fly | ARGUMENTS |      w_id -
-   * warehouse id
-   * +==================================================================
-   */
-  public static void loadOrders(TpccLoadConfig loadConfig, int d_id, int w_id, int shardCount, int shardId) throws Exception {
+  public static void loadOrders(SQLDB db, int d_id, int w_id) {
     int o_id;
     int o_c_id;
     int o_d_id;
