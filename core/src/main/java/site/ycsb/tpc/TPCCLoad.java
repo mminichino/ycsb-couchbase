@@ -5,38 +5,62 @@ import site.ycsb.Record;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Properties;
 
-public class TPCCLoad {
-  public static final String TPCC_TRANSACTION_COUNT = "tpcc.transactionCount";
-  public static final String TPCC_MAX_ITEMS = "tpcc.maxItems";
-  public static final String TPCC_CUST_PER_DIST = "tpcc.custPerDist";
-  public static final String TPCC_DIST_PER_WAREHOUSE = "tpcc.distPerWarehouse";
-  public static final String TPCC_ORD_PER_DIST = "tpcc.ordPerDist";
-  public static final String TPCC_MAX_NUM_ITEMS = "tpcc.maxNumItems";
-  public static final String TPCC_MAX_ITEM_LEN = "tpcc.maxItemLen";
+public final class TPCCLoad {
+  private final int maxItems;
+  private final int custPerDist;
+  private final int distPerWarehouse;
+  private final int ordPerDist;
+  private final boolean enableDebug;
+  private final TPCCUtil util;
 
-  private static int transactionCount;
-  private static int maxItems;
-  private static int custPerDist;
-  private static int distPerWarehouse;
-  private static int ordPerDist;
-  private static int maxNumItems;
-  private static int maxItemLen;
+  public static class TPCCLoadBuilder {
+    private int maxItems = 100000;
+    private int custPerDist = 3000;
+    private int distPerWarehouse = 10;
+    private int ordPerDist = 3000;
+    private boolean enableDebug = false;
 
-  private static boolean enableDebug = false;
+    public TPCCLoadBuilder maxItems(int value) {
+      this.maxItems = value;
+      return this;
+    }
 
-  public static void init(Properties properties) {
-    transactionCount = Integer.parseInt(properties.getProperty("tpcc.transactionCount", "5"));
-    maxItems = Integer.parseInt(properties.getProperty("tpcc.maxItems", "100000"));
-    custPerDist = Integer.parseInt(properties.getProperty("tpcc.custPerDist", "3000"));
-    distPerWarehouse = Integer.parseInt(properties.getProperty("tpcc.distPerWarehouse", "10"));
-    ordPerDist = Integer.parseInt(properties.getProperty("tpcc.ordPerDist", "3000"));
-    maxNumItems = Integer.parseInt(properties.getProperty("tpcc.maxNumItems", "15"));
-    maxItemLen = Integer.parseInt(properties.getProperty("tpcc.maxItemLen", "24"));
+    public TPCCLoadBuilder custPerDist(int value) {
+      this.custPerDist = value;
+      return this;
+    }
+
+    public TPCCLoadBuilder distPerWarehouse(int value) {
+      this.distPerWarehouse = value;
+      return this;
+    }
+
+    public TPCCLoadBuilder ordPerDist(int value) {
+      this.ordPerDist = value;
+      return this;
+    }
+
+    public TPCCLoadBuilder enableDebug(boolean value) {
+      this.enableDebug = value;
+      return this;
+    }
+
+    public TPCCLoad build() {
+      return new TPCCLoad(this);
+    }
   }
 
-  public static void loadItems(SQLDB db) {
+  private TPCCLoad(TPCCLoadBuilder builder) {
+    this.maxItems = builder.maxItems;
+    this.custPerDist = builder.custPerDist;
+    this.distPerWarehouse = builder.distPerWarehouse;
+    this.ordPerDist = builder.ordPerDist;
+    this.enableDebug = builder.enableDebug;
+    this.util = new TPCCUtil(custPerDist, ordPerDist);
+  }
+
+  public void loadItems(SQLDB db) {
     int i_id = 0;
     int i_im_id = 0;
     String i_name = null;
@@ -54,7 +78,7 @@ public class TPCCLoad {
     }
     for (i = 0; i < maxItems / 10; i++) {
       do {
-        pos = TPCCUtil.randomNumber(0, maxItems);
+        pos = util.randomNumber(0, maxItems);
       } while (orig[pos] != 0);
       orig[pos] = 1;
     }
@@ -62,15 +86,15 @@ public class TPCCLoad {
     db.createTable("item", Tables.itemTableC, Tables.itemKeysC);
 
     for (i_id = 1; i_id <= maxItems; i_id++) {
-      i_im_id = TPCCUtil.randomNumber(1, 10000);
+      i_im_id = util.randomNumber(1, 10000);
 
-      i_name = TPCCUtil.makeAlphaString(14, 24);
+      i_name = util.makeAlphaString(14, 24);
 
-      i_price = (float) (TPCCUtil.randomNumber(100, 10000) / 100.0);
+      i_price = (float) (util.randomNumber(100, 10000) / 100.0);
 
-      i_data = TPCCUtil.makeAlphaString(26, 50);
+      i_data = util.makeAlphaString(26, 50);
       if (orig[i_id] != 0) {
-        pos = TPCCUtil.randomNumber(0, i_data.length() - 8);
+        pos = util.randomNumber(0, i_data.length() - 8);
         i_data = i_data.substring(0, pos) + "original" + i_data.substring(pos + 8);
       }
 
@@ -86,7 +110,7 @@ public class TPCCLoad {
     System.out.println("Item Done");
   }
 
-  public static void loadWare(SQLDB db, int min_ware, int max_ware) {
+  public void loadWare(SQLDB db, int min_ware, int max_ware) {
     int w_id;
     String w_name = null;
     String w_street_1 = null;
@@ -107,14 +131,14 @@ public class TPCCLoad {
     for (w_id = min_ware; w_id <= max_ware; w_id++) {
       System.out.println("Current Shard: " + currentShard);
 
-      w_name = TPCCUtil.makeAlphaString(6, 10);
-      w_street_1 = TPCCUtil.makeAlphaString(10, 20);
-      w_street_2 = TPCCUtil.makeAlphaString(10, 20);
-      w_city = TPCCUtil.makeAlphaString(10, 20);
-      w_state = TPCCUtil.makeAlphaString(2, 2);
-      w_zip = TPCCUtil.makeAlphaString(9, 9);
+      w_name = util.makeAlphaString(6, 10);
+      w_street_1 = util.makeAlphaString(10, 20);
+      w_street_2 = util.makeAlphaString(10, 20);
+      w_city = util.makeAlphaString(10, 20);
+      w_state = util.makeAlphaString(2, 2);
+      w_zip = util.makeAlphaString(9, 9);
 
-      w_tax = ((double) TPCCUtil.randomNumber(10, 20) / 100.0);
+      w_tax = ((double) util.randomNumber(10, 20) / 100.0);
       w_ytd = 3000000.00;
 
       if (enableDebug) {
@@ -138,7 +162,7 @@ public class TPCCLoad {
     }
   }
 
-  public static void loadCust(SQLDB db, int min_ware, int max_ware) {
+  public void loadCust(SQLDB db, int min_ware, int max_ware) {
     try {
       for (int w_id = min_ware; w_id <= max_ware; w_id++) {
         for (int d_id = 1; d_id <= distPerWarehouse; d_id++) {
@@ -150,7 +174,7 @@ public class TPCCLoad {
     }
   }
 
-  public static void loadOrd(SQLDB db, int max_ware) {
+  public void loadOrd(SQLDB db, int max_ware) {
     try {
       for (int w_id = 1; w_id <= max_ware; w_id++) {
         for (int d_id = 1; d_id <= distPerWarehouse; d_id++) {
@@ -162,7 +186,7 @@ public class TPCCLoad {
     }
   }
 
-  public static void stock(SQLDB db, int w_id) {
+  public void stock(SQLDB db, int w_id) {
     int s_i_id = 0;
     int s_w_id = 0;
     int s_quantity = 0;
@@ -195,26 +219,26 @@ public class TPCCLoad {
 
     for (i = 0; i < maxItems / 10; i++) {
       do {
-        pos = TPCCUtil.randomNumber(0, maxItems);
+        pos = util.randomNumber(0, maxItems);
       } while (orig[pos] != 0); //TODO: FIx later
       orig[pos] = 1;
     }
 
     for (s_i_id = 1; s_i_id <= maxItems; s_i_id++) {
-      s_quantity = TPCCUtil.randomNumber(10, 100);
+      s_quantity = util.randomNumber(10, 100);
 
-      s_dist_01 = TPCCUtil.makeAlphaString(24, 24);
-      s_dist_02 = TPCCUtil.makeAlphaString(24, 24);
-      s_dist_03 = TPCCUtil.makeAlphaString(24, 24);
-      s_dist_04 = TPCCUtil.makeAlphaString(24, 24);
-      s_dist_05 = TPCCUtil.makeAlphaString(24, 24);
-      s_dist_06 = TPCCUtil.makeAlphaString(24, 24);
-      s_dist_07 = TPCCUtil.makeAlphaString(24, 24);
-      s_dist_08 = TPCCUtil.makeAlphaString(24, 24);
-      s_dist_09 = TPCCUtil.makeAlphaString(24, 24);
-      s_dist_10 = TPCCUtil.makeAlphaString(24, 24);
+      s_dist_01 = util.makeAlphaString(24, 24);
+      s_dist_02 = util.makeAlphaString(24, 24);
+      s_dist_03 = util.makeAlphaString(24, 24);
+      s_dist_04 = util.makeAlphaString(24, 24);
+      s_dist_05 = util.makeAlphaString(24, 24);
+      s_dist_06 = util.makeAlphaString(24, 24);
+      s_dist_07 = util.makeAlphaString(24, 24);
+      s_dist_08 = util.makeAlphaString(24, 24);
+      s_dist_09 = util.makeAlphaString(24, 24);
+      s_dist_10 = util.makeAlphaString(24, 24);
 
-      s_data = TPCCUtil.makeAlphaString(26, 50);
+      s_data = util.makeAlphaString(26, 50);
 
       if (orig[s_i_id] != 0) {
         s_data = "original";
@@ -247,7 +271,7 @@ public class TPCCLoad {
     System.out.println("Stock Done");
   }
 
-  public static void district(SQLDB db, int w_id) {
+  public void district(SQLDB db, int w_id) {
     int d_id;
     int d_w_id;
     String d_name;
@@ -270,14 +294,14 @@ public class TPCCLoad {
     db.createTable("district", Tables.districtTableC, Tables.districtKeysC);
 
     for (d_id = 1; d_id <= distPerWarehouse; d_id++) {
-      d_name = TPCCUtil.makeAlphaString(6, 10);
-      d_street_1 = TPCCUtil.makeAlphaString(10, 20);
-      d_street_2 = TPCCUtil.makeAlphaString(10, 20);
-      d_city = TPCCUtil.makeAlphaString(10, 20);
-      d_state = TPCCUtil.makeAlphaString(2, 2);
-      d_zip = TPCCUtil.makeAlphaString(9, 9);
+      d_name = util.makeAlphaString(6, 10);
+      d_street_1 = util.makeAlphaString(10, 20);
+      d_street_2 = util.makeAlphaString(10, 20);
+      d_city = util.makeAlphaString(10, 20);
+      d_state = util.makeAlphaString(2, 2);
+      d_zip = util.makeAlphaString(9, 9);
 
-      d_tax = (float) (((float) TPCCUtil.randomNumber(10, 20)) / 100.0);
+      d_tax = (float) (((float) util.randomNumber(10, 20)) / 100.0);
 
       Record record = new Record();
       record.add("d_id", d_id);
@@ -299,7 +323,7 @@ public class TPCCLoad {
     }
   }
 
-  public static void loadCustomer(SQLDB db, int d_id, int w_id) {
+  public void loadCustomer(SQLDB db, int d_id, int w_id) {
     int c_id = 0;
     int c_d_id = 0;
     int c_w_id = 0;
@@ -329,34 +353,34 @@ public class TPCCLoad {
       c_d_id = d_id;
       c_w_id = w_id;
 
-      c_first = TPCCUtil.makeAlphaString(8, 16);
+      c_first = util.makeAlphaString(8, 16);
       c_middle = "O" + "E";
 
       if (c_id <= 1000) {
-        c_last = TPCCUtil.lastName(c_id - 1);
+        c_last = util.lastName(c_id - 1);
       } else {
-        c_last = TPCCUtil.lastName(TPCCUtil.nuRand(255, 0, 999));
+        c_last = util.lastName(util.nuRand(255, 0, 999));
       }
 
-      c_street_1 = TPCCUtil.makeAlphaString(10, 20);
-      c_street_2 = TPCCUtil.makeAlphaString(10, 20);
-      c_city = TPCCUtil.makeAlphaString(10, 20);
-      c_state = TPCCUtil.makeAlphaString(2, 2);
-      c_zip = TPCCUtil.makeAlphaString(9, 9);
+      c_street_1 = util.makeAlphaString(10, 20);
+      c_street_2 = util.makeAlphaString(10, 20);
+      c_city = util.makeAlphaString(10, 20);
+      c_state = util.makeAlphaString(2, 2);
+      c_zip = util.makeAlphaString(9, 9);
 
-      c_phone = TPCCUtil.makeNumberString(16, 16);
+      c_phone = util.makeNumberString(16, 16);
 
-      if (TPCCUtil.randomNumber(0, 1) == 1)
+      if (util.randomNumber(0, 1) == 1)
         c_credit = "G";
       else
         c_credit = "B";
       c_credit += "C";
 
       c_credit_lim = 50000;
-      c_discount = (float) (((float) TPCCUtil.randomNumber(0, 50)) / 100.0);
+      c_discount = (float) (((float) util.randomNumber(0, 50)) / 100.0);
       c_balance = (float) -10.0;
 
-      c_data = TPCCUtil.makeAlphaString(300, 500);
+      c_data = util.makeAlphaString(300, 500);
 
       String dateFormat = "yy-MM-dd'T'HH:mm:ss";
       SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
@@ -391,7 +415,7 @@ public class TPCCLoad {
       }
 
       h_amount = 10.0;
-      h_data = TPCCUtil.makeAlphaString(12, 24);
+      h_data = util.makeAlphaString(12, 24);
 
       try {
         Record record = new Record();
@@ -415,7 +439,7 @@ public class TPCCLoad {
     System.out.println("Customer Done");
   }
 
-  public static void loadOrders(SQLDB db, int d_id, int w_id) {
+  public void loadOrders(SQLDB db, int d_id, int w_id) {
     int o_id;
     int o_c_id;
     int o_d_id;
@@ -437,11 +461,11 @@ public class TPCCLoad {
     System.out.printf("Loading Orders for D=%d, W=%d\n", d_id, w_id);
     o_d_id = d_id;
     o_w_id = w_id;
-    TPCCUtil.initPermutation(custPerDist, ordPerDist);
+    util.initPermutation();
     for (o_id = 1; o_id <= ordPerDist; o_id++) {
-      o_c_id = TPCCUtil.getPermutation(ordPerDist);
-      o_carrier_id = TPCCUtil.randomNumber(1, 10);
-      o_ol_cnt = TPCCUtil.randomNumber(5, 15);
+      o_c_id = util.getPermutation();
+      o_carrier_id = util.randomNumber(1, 10);
+      o_ol_cnt = util.randomNumber(5, 15);
 
       String dateFormat = "yy-MM-dd'T'HH:mm:ss";
       SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
@@ -482,14 +506,14 @@ public class TPCCLoad {
             o_id, o_c_id, o_d_id, o_w_id);
 
       for (ol = 1; ol <= o_ol_cnt; ol++) {
-        ol_i_id = TPCCUtil.randomNumber(1, maxItems);
+        ol_i_id = util.randomNumber(1, maxItems);
         ol_supply_w_id = o_w_id;
         ol_quantity = 5;
         ol_amount = (float) 0.0;
 
-        ol_dist_info = TPCCUtil.makeAlphaString(24, 24);
+        ol_dist_info = util.makeAlphaString(24, 24);
 
-        tmp_float = (float) ((float) (TPCCUtil.randomNumber(10, 10000)) / 100.0);
+        tmp_float = (float) ((float) (util.randomNumber(10, 10000)) / 100.0);
 
         if (o_id > 2100) {
           Record record = new Record();

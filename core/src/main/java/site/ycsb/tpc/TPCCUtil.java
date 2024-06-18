@@ -2,23 +2,31 @@ package site.ycsb.tpc;
 
 import java.util.Random;
 
-public class TPCCUtil {
-  private static final Random rand = new Random();
-  private static final String[] lastNameParts = {
+public final class TPCCUtil {
+  private final Random rand = new Random();
+  private final String[] lastNameParts = {
       "BAR", "OUGHT", "ABLE", "PRI", "PRES", "ESE",
       "ANTI", "CALLY", "ATION", "EING"
   };
-  private static final int C_255 = randomNumber(0, 255);
-  private static final int C_1023 = randomNumber(0, 1023);
-  private static final int C_8191 = randomNumber(0, 8191);
-  static int permCount;
-  public static int[] nums;
+  private final int C_255 = randomNumber(0, 255);
+  private final int C_1023 = randomNumber(0, 1023);
+  private final int C_8191 = randomNumber(0, 8191);
+  private int custPerDist;
+  private int ordPerDist;
+  private int permCount;
+  private int[] nums;
 
-  public static int randomNumber(int minValue, int maxValue) {
+  public TPCCUtil(int cust, int ord) {
+    custPerDist = cust;
+    ordPerDist = ord;
+    nums = new int[custPerDist];
+  }
+
+  public int randomNumber(int minValue, int maxValue) {
     return rand.nextInt((maxValue - minValue) + 1) + minValue;
   }
 
-  public static String makeAlphaString(int minValue, int maxValue) {
+  public String makeAlphaString(int minValue, int maxValue) {
     String numbers = "0123456789";
     String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     String lower = "abcdefghijklmnopqrstuvwxyz";
@@ -35,7 +43,7 @@ public class TPCCUtil {
     return string.toString();
   }
 
-  static String lastName(int num) {
+  public String lastName(int num) {
     String name;
 
     name = lastNameParts[num / 100];
@@ -45,7 +53,7 @@ public class TPCCUtil {
     return name;
   }
 
-  public static int nuRand(int A, int x, int y) {
+  public int nuRand(int A, int x, int y) {
     int C;
     switch (A) {
       case 255:
@@ -63,7 +71,7 @@ public class TPCCUtil {
     return ((((randomNumber(0, A) | randomNumber(x, y)) + C) % (y - x + 1)) + x);
   }
 
-  public static String makeNumberString(int minValue, int maxValue) {
+  public String makeNumberString(int minValue, int maxValue) {
     String numbers = "0123456789";
     char[] alphanum = numbers.toCharArray();
     int length = randomNumber(minValue, maxValue);
@@ -77,11 +85,10 @@ public class TPCCUtil {
     return string.toString();
   }
 
-  public static void initPermutation(int custPerDist, int ordPerDist) {
-    int i, j = 0;
+  public void initPermutation() {
+    int i, j;
     int[] tempNums = new int[custPerDist];
     permCount = 0;
-    nums = new int[custPerDist];
 
     for (i = 0; i < ordPerDist; i++) {
       nums[i] = i + 1;
@@ -89,15 +96,17 @@ public class TPCCUtil {
     }
 
     for (i = 0; i < ordPerDist - 1; i++) {
-      j = (int) randomNumber(i + 1, ordPerDist - 1);
+      j = randomNumber(i + 1, ordPerDist - 1);
       nums[j] = tempNums[i];
     }
   }
 
-  public static int getPermutation(int ordPerDist) {
+  public int getPermutation() {
     if (permCount >= ordPerDist) {
-      throw new RuntimeException("GetPermutation: past end of list!\n");
+      throw new RuntimeException("GetPermutation: past end of list");
     }
     return nums[permCount++];
   }
+
+  private TPCCUtil() {}
 }
