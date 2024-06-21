@@ -9,10 +9,16 @@ import java.util.stream.Collectors;
 public class Record {
   private final ObjectNode data;
   private Set<String> primaryKey;
+  private String table;
 
-  public Record() {
+  public Record(String table) {
     ObjectMapper mapper = new ObjectMapper();
     this.data = mapper.createObjectNode();
+    this.table = table;
+  }
+
+  public String tableName() {
+    return table;
   }
 
   public void setKey(Set<String> key) {

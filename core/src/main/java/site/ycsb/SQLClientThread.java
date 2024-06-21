@@ -23,6 +23,8 @@ import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -45,6 +47,7 @@ public class SQLClientThread implements Runnable {
   private final Properties props;
   private long targetOpsTickNs;
   private final Measurements measurements;
+  private final AtomicInteger opsCounter;
 
   /**
    * Constructor.
@@ -58,11 +61,12 @@ public class SQLClientThread implements Runnable {
    * @param completeLatch        The latch tracking the completion of all clients.
    */
   public SQLClientThread(SQLDB db, boolean runMode, SQLWorkload workload, Properties props, int opcount,
-                         double targetPerThreadPerMS, CountDownLatch completeLatch) {
+                         double targetPerThreadPerMS, CountDownLatch completeLatch, AtomicInteger opsCounter) {
     this.db = db;
     this.runMode = runMode;
     this.workload = workload;
     this.opcount = opcount;
+    this.opsCounter = opsCounter;
     opsDone = 0;
     if (targetPerThreadPerMS > 0) {
       targetOpsPerMs = targetPerThreadPerMS;
@@ -83,7 +87,7 @@ public class SQLClientThread implements Runnable {
   }
 
   public int getOpsDone() {
-    return opsDone;
+    return opsCounter.get();
   }
 
   @Override
@@ -122,7 +126,6 @@ public class SQLClientThread implements Runnable {
           throttleNanos(startTimeNanos);
         }
       } else {
-
         while (((opcount == 0) || (opsDone < opcount)) && workload.workloadRunState()) {
 
           if (!workload.load(db, workloadState)) {

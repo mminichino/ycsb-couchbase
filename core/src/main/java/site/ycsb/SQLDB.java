@@ -32,9 +32,9 @@ public abstract class SQLDB {
 
   public abstract Status select(String table, String statement);
 
-  public abstract Status insert(String table, Record data);
+  public abstract Status insert(Record data);
 
-  public abstract Status update(String table, Record data);
+  public abstract Status update(Record data);
 
   public abstract Status query(String statement);
 

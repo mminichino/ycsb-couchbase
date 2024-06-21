@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 /**
@@ -39,7 +40,7 @@ public abstract class SQLWorkload {
       (Logger) LoggerFactory.getLogger("site.ycsb.SQLWorkload");
   private final AtomicBoolean stopRequested = new AtomicBoolean(false);
   private final List<Future<Status>> tasks = new ArrayList<>();
-  private ExecutorService executor;
+  private ExecutorService executor = Executors.newFixedThreadPool(32);
   private boolean debug = false;
 
   /**
@@ -47,6 +48,10 @@ public abstract class SQLWorkload {
    * Called once, in the main client thread, before any operations are started.
    */
   public void init(Properties p) throws WorkloadException {
+  }
+
+  public long prepare(SQLDB db, boolean runMode) throws WorkloadException {
+    return 0;
   }
 
   public void initThreadPool(int count) {
@@ -112,7 +117,6 @@ public abstract class SQLWorkload {
     for (Future<Status> future : tasks) {
       try {
         Status result = future.get();
-//        tasks.remove(future);
         if (debug) {
           LOGGER.debug("Task status: {}", result);
         }
@@ -121,6 +125,7 @@ public abstract class SQLWorkload {
         status = false;
       }
     }
+    tasks.clear();
     return status;
   }
 

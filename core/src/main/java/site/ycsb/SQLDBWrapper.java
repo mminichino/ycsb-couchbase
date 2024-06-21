@@ -23,6 +23,7 @@ import site.ycsb.measurements.Measurements;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Wrapper around a "real" DB that measures latencies and counts return codes.
@@ -51,7 +52,9 @@ public class SQLDBWrapper extends SQLDB {
   private final String scopeStringScan;
   private final String scopeStringUpdate;
 
-  public SQLDBWrapper(final SQLDB db, final Tracer tracer) {
+  private final AtomicInteger counter;
+
+  public SQLDBWrapper(final SQLDB db, final Tracer tracer, final AtomicInteger opsCounter) {
     this.db = db;
     measurements = Measurements.getMeasurements();
     this.tracer = tracer;
@@ -63,6 +66,7 @@ public class SQLDBWrapper extends SQLDB {
     scopeStringRead = simple + "#read";
     scopeStringScan = simple + "#scan";
     scopeStringUpdate = simple + "#update";
+    counter = opsCounter;
   }
 
   /**
@@ -131,7 +135,7 @@ public class SQLDBWrapper extends SQLDB {
       Status res = db.createTable(table, columns, keys);
       long en = System.nanoTime();
       measure("CREATE-TABLE", res, ist, st, en);
-      measurements.reportStatus("READ", res);
+      measurements.reportStatus("CREATE-TABLE", res);
       return res;
     }
   }
@@ -146,7 +150,7 @@ public class SQLDBWrapper extends SQLDB {
       Status res = db.dropTable(table, columns, keys);
       long en = System.nanoTime();
       measure("DROP-TABLE", res, ist, st, en);
-      measurements.reportStatus("READ", res);
+      measurements.reportStatus("DROP-TABLE", res);
       return res;
     }
   }
@@ -162,7 +166,8 @@ public class SQLDBWrapper extends SQLDB {
       Status res = db.select(table, statement);
       long en = System.nanoTime();
       measure("SELECT", res, ist, st, en);
-      measurements.reportStatus("READ", res);
+      measurements.reportStatus("SELECT", res);
+      counter.incrementAndGet();
       return res;
     }
   }
@@ -170,14 +175,15 @@ public class SQLDBWrapper extends SQLDB {
   /**
    * Perform a record insert into the database.
    */
-  public Status insert(String table, Record data) {
+  public Status insert(Record data) {
     try (final TraceScope span = tracer.newScope(scopeStringScan)) {
       long ist = measurements.getIntendedStartTimeNs();
       long st = System.nanoTime();
-      Status res = db.insert(table, data);
+      Status res = db.insert(data);
       long en = System.nanoTime();
       measure("INSERT", res, ist, st, en);
-      measurements.reportStatus("SCAN", res);
+      measurements.reportStatus("INSERT", res);
+      counter.incrementAndGet();
       return res;
     }
   }
@@ -203,14 +209,15 @@ public class SQLDBWrapper extends SQLDB {
    * Update a record in the database. Any field/value pairs in the specified values HashMap will be written into the
    * record with the specified record key, overwriting any existing values with the same field name.
    */
-  public Status update(String table, Record data) {
+  public Status update(Record data) {
     try (final TraceScope span = tracer.newScope(scopeStringUpdate)) {
       long ist = measurements.getIntendedStartTimeNs();
       long st = System.nanoTime();
-      Status res = db.update(table, data);
+      Status res = db.update(data);
       long en = System.nanoTime();
       measure("UPDATE", res, ist, st, en);
       measurements.reportStatus("UPDATE", res);
+      counter.incrementAndGet();
       return res;
     }
   }
@@ -227,7 +234,8 @@ public class SQLDBWrapper extends SQLDB {
       Status res = db.query(statement);
       long en = System.nanoTime();
       measure("QUERY", res, ist, st, en);
-      measurements.reportStatus("INSERT", res);
+      measurements.reportStatus("QUERY", res);
+      counter.incrementAndGet();
       return res;
     }
   }
@@ -243,6 +251,7 @@ public class SQLDBWrapper extends SQLDB {
       long en = System.nanoTime();
       measure("DELETE", res, ist, st, en);
       measurements.reportStatus("DELETE", res);
+      counter.incrementAndGet();
       return res;
     }
   }

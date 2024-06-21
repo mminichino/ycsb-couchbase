@@ -39,8 +39,12 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Math.toIntExact;
+
+import org.slf4j.LoggerFactory;
+import ch.qos.logback.classic.Logger;
 
 /**
  * Turn seconds remaining into more useful units.
@@ -86,6 +90,9 @@ public final class SQLClient {
   private SQLClient() {
     //not used
   }
+
+  static final Logger LOGGER =
+      (Logger)LoggerFactory.getLogger("site.ycsb.SQLClient");
 
   public static final String DEFAULT_RECORD_COUNT = "0";
 
@@ -202,6 +209,8 @@ public final class SQLClient {
    * An optional thread used to track progress and measure JVM stats.
    */
   private static SQLStatusThread statusthread = null;
+
+  private static final AtomicInteger opsCounter = new AtomicInteger(0);
 
   // HTrace integration related constants.
 
@@ -358,7 +367,7 @@ public final class SQLClient {
   public static void main(String[] args) {
     Properties props = parseArguments(args);
 
-    boolean status = Boolean.valueOf(props.getProperty(STATUS_PROPERTY, String.valueOf(false)));
+    boolean status = Boolean.parseBoolean(props.getProperty(STATUS_PROPERTY, String.valueOf(false)));
     String label = props.getProperty(LABEL_PROPERTY, "");
 
     long maxExecutionTime = Integer.parseInt(props.getProperty(MAX_EXECUTION_TIME, "0"));
@@ -408,7 +417,10 @@ public final class SQLClient {
 
     final Tracer tracer = getTracer(props, workload);
 
-    initWorkload(props, warningthread, workload, tracer);
+    long records = initWorkload(dbname, props, warningthread, workload, tracer);
+
+    props.setProperty(RECORD_COUNT_PROPERTY, String.valueOf(records));
+    props.setProperty(INSERT_COUNT_PROPERTY, String.valueOf(records));
 
     System.err.printf("Starting test with %d threads\n", threadcount);
     final CountDownLatch completeLatch = new CountDownLatch(threadcount);
@@ -555,7 +567,7 @@ public final class SQLClient {
       for (int threadid = 0; threadid < threadcount; threadid++) {
         SQLDB db;
         try {
-          db = SQLDBFactory.newDB(dbname, props, tracer);
+          db = SQLDBFactory.newDB(dbname, props, tracer, opsCounter);
         } catch (UnknownDBException e) {
           System.out.println("Unknown DB " + dbname);
           initFailed = true;
@@ -577,7 +589,7 @@ public final class SQLClient {
         }
 
         SQLClientThread t = new SQLClientThread(db, dotransactions, workload, props, threadopcount, targetperthreadperms,
-            completeLatch);
+            completeLatch, opsCounter);
         t.setThreadId(threadid);
         t.setThreadCount(threadcount);
         clients.add(t);
@@ -597,17 +609,23 @@ public final class SQLClient {
         .build();
   }
 
-  private static void initWorkload(Properties props, Thread warningthread, SQLWorkload workload, Tracer tracer) {
+  private static long initWorkload(String dbname, Properties props, Thread warningthread, SQLWorkload workload, Tracer tracer) {
+    boolean runMode = Boolean.parseBoolean(props.getProperty(DO_TRANSACTIONS_PROPERTY, String.valueOf(true)));
+    System.err.println("Initializing workload");
     try {
-      try (final TraceScope span = tracer.newScope(CLIENT_WORKLOAD_INIT_SPAN)) {
+      SQLDB db = SQLDBFactory.newDB(dbname, props, tracer, opsCounter);
+      Objects.requireNonNull(db).init();
+      try (final TraceScope ignored = tracer.newScope(CLIENT_WORKLOAD_INIT_SPAN)) {
         workload.init(props);
+        long records = workload.prepare(db, runMode);
         warningthread.interrupt();
+        return records;
       }
-    } catch (WorkloadException e) {
-      e.printStackTrace();
-      e.printStackTrace(System.out);
-      System.exit(0);
+    } catch (WorkloadException | UnknownDBException | DBException e) {
+      LOGGER.error(e.getMessage(), e);
+      System.exit(1);
     }
+    return 0;
   }
 
   private static void initStatisticsThread(String statsClass, Properties properties) {

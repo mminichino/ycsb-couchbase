@@ -20,6 +20,7 @@ package site.ycsb;
 import org.apache.htrace.core.Tracer;
 
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Creates a DB layer by dynamically classloading the specified DB class.
@@ -29,7 +30,7 @@ public final class SQLDBFactory {
     // not used
   }
 
-  public static SQLDB newDB(String dbname, Properties properties, final Tracer tracer) throws UnknownDBException {
+  public static SQLDB newDB(String dbname, Properties properties, final Tracer tracer, final AtomicInteger counter) throws UnknownDBException {
     ClassLoader classLoader = SQLDBFactory.class.getClassLoader();
 
     SQLDB ret;
@@ -45,7 +46,7 @@ public final class SQLDBFactory {
 
     ret.setProperties(properties);
 
-    return new SQLDBWrapper(ret, tracer);
+    return new SQLDBWrapper(ret, tracer, counter);
   }
 
 }

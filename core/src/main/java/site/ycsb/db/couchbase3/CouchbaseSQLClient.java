@@ -287,8 +287,9 @@ public class CouchbaseSQLClient extends SQLDB {
     }
   }
 
-  public Status insert(String table, Record data) {
+  public Status insert(Record data) {
     try {
+      String table = data.tableName();
       String key = String.join("::", data.getKeyValues());
       Collection collection = bucket.scope(scopeName).collection(table);
       return retryBlock(() -> {
@@ -302,10 +303,11 @@ public class CouchbaseSQLClient extends SQLDB {
     }
   }
 
-  public Status update(String table, Record data) {
-    String key = String.join("::", data.getKeyValues());
-    Collection collection = bucket.scope(scopeName).collection(table);
+  public Status update(Record data) {
     try {
+      String table = data.tableName();
+      String key = String.join("::", data.getKeyValues());
+      Collection collection = bucket.scope(scopeName).collection(table);
       return retryBlock(() -> {
         collection.upsert(key, data.contents(),
             upsertOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability));
