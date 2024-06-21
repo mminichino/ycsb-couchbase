@@ -18,6 +18,7 @@ import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
 import com.couchbase.client.java.codec.RawJsonTranscoder;
 import com.couchbase.client.java.codec.Transcoder;
+import com.couchbase.client.java.codec.TypeRef;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
@@ -35,6 +36,9 @@ import java.util.function.Consumer;
 
 import com.couchbase.client.java.json.JsonArray;
 import com.couchbase.client.java.manager.collection.CollectionSpec;
+import com.couchbase.client.java.query.QueryResult;
+import com.couchbase.client.java.query.QueryStatus;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -265,25 +269,21 @@ public class CouchbaseSQLClient extends SQLDB {
    * Perform select.
    */
   @Override
-  public Status select(String table, String statement) {
+  public List<Map<String, ?>> select(String statement, ArrayList<Object> parameters) {
+    TypeRef<Map<String, ?>> typeRef = new TypeRef<>() {};
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug(statement);
+    }
     try {
-      cluster.query(statement, queryOptions()
-              .pipelineBatch(128)
-              .pipelineCap(1024)
-              .scanCap(1024)
-              .readonly(true)
+      QueryResult result = cluster.query(statement, queryOptions()
               .adhoc(adhoc)
               .maxParallelism(maxParallelism)
+              .parameters(JsonArray.from(parameters))
               .retryStrategy(FailFastRetryStrategy.INSTANCE));
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug(statement);
-      }
-      return Status.OK;
-    } catch (DocumentNotFoundException e) {
-      return Status.NOT_FOUND;
+      return result.rowsAs(typeRef);
     } catch (Throwable t) {
       LOGGER.error("select transaction exception: {}", t.getMessage(), t);
-      return Status.ERROR;
+      return new ArrayList<>();
     }
   }
 
@@ -303,16 +303,17 @@ public class CouchbaseSQLClient extends SQLDB {
     }
   }
 
-  public Status update(Record data) {
+  public Status update(String statement, ArrayList<Object> parameters) {
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug(statement);
+    }
     try {
-      String table = data.tableName();
-      String key = String.join("::", data.getKeyValues());
-      Collection collection = bucket.scope(scopeName).collection(table);
-      return retryBlock(() -> {
-        collection.upsert(key, data.contents(),
-            upsertOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability));
-        return Status.OK;
-      });
+      QueryResult result = cluster.query(statement, queryOptions()
+          .adhoc(adhoc)
+          .maxParallelism(maxParallelism)
+          .parameters(JsonArray.from(parameters))
+          .retryStrategy(FailFastRetryStrategy.INSTANCE));
+      return result.metaData().status() == QueryStatus.SUCCESS ? Status.OK : Status.ERROR;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;

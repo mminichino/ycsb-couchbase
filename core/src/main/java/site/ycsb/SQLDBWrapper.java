@@ -159,14 +159,14 @@ public class SQLDBWrapper extends SQLDB {
    * Read a record from the database. Each field/value pair from the result
    * will be stored in a HashMap.
    */
-  public Status select(String table, String statement) {
+  public List<Map<String, ?>> select(String statement, ArrayList<Object> parameters) {
     try (final TraceScope span = tracer.newScope(scopeStringRead)) {
       long ist = measurements.getIntendedStartTimeNs();
       long st = System.nanoTime();
-      Status res = db.select(table, statement);
+      List<Map<String, ?>> res = db.select(statement, parameters);
       long en = System.nanoTime();
-      measure("SELECT", res, ist, st, en);
-      measurements.reportStatus("SELECT", res);
+      measure("SELECT", Status.OK, ist, st, en);
+      measurements.reportStatus("SELECT", Status.OK);
       counter.incrementAndGet();
       return res;
     }
@@ -209,11 +209,11 @@ public class SQLDBWrapper extends SQLDB {
    * Update a record in the database. Any field/value pairs in the specified values HashMap will be written into the
    * record with the specified record key, overwriting any existing values with the same field name.
    */
-  public Status update(Record data) {
+  public Status update(String statement, ArrayList<Object> parameters) {
     try (final TraceScope span = tracer.newScope(scopeStringUpdate)) {
       long ist = measurements.getIntendedStartTimeNs();
       long st = System.nanoTime();
-      Status res = db.update(data);
+      Status res = db.update(statement, parameters);
       long en = System.nanoTime();
       measure("UPDATE", res, ist, st, en);
       measurements.reportStatus("UPDATE", res);

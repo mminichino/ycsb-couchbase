@@ -4,6 +4,12 @@ import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Logger;
 import site.ycsb.SQLDB;
 
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
 public class TPCCNewOrder {
   static final Logger LOGGER =
       (Logger)LoggerFactory.getLogger("site.ycsb.tpc.TPCCNewOrder");
@@ -26,6 +32,10 @@ public class TPCCNewOrder {
   int[] stock;
   int[] ol_num_seq;
   boolean joins;
+
+  boolean debug = false;
+
+  TPCCStatements pStmts;
 
   public void NewOrder(int maxNumItems, boolean joins) {
     iname = new String[maxNumItems];
@@ -113,104 +123,77 @@ public class TPCCNewOrder {
       int min_num = 0;
       int i = 0, j = 0, tmp = 0, swp = 0;
 
+      String dateFormat = "yy-MM-dd'T'HH:mm:ss";
+      SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+      String currentTimeStamp = timeStampFormat.format(new Date());
 
-      //struct timespec tbuf1,tbuf_start;
-      //clock_t clk1,clk_start;
-
-
-      //Timestamp
-      java.sql.Timestamp time = new Timestamp(System.currentTimeMillis());
-      //String currentTimeStamp = "'" + time.toString() + "'";
-      String currentTimeStamp = time.toString();
-
-
-      // Changing how this works if joins = false
       if (joins) {
-        //Get prepared statement
-        //"SELECT c_discount, c_last, c_credit, w_tax FROM customer, warehouse WHERE w_id = ? AND c_w_id = w_id AND c_d_id = ? AND c_id = ?"
-        logger.debug("joins = true");
         try {
-          int column = 1;
-          final PreparedStatement pstmt0 = pStmts.getStatement(0);
-          pstmt0.setInt(column++, w_id);
-          pstmt0.setInt(column++, w_id);
-          pstmt0.setInt(column++, d_id);
-          pstmt0.setInt(column++, c_id);
-          if (TRACE)
-            logger.trace("SELECT c_discount, c_last, c_credit, w_tax FROM customer, warehouse WHERE w_id = " + w_id + " AND c_w_id = " + w_id + " AND c_d_id = " + d_id + " AND c_id = " + c_id);
-          try (ResultSet rs = pstmt0.executeQuery()) {
-            if (rs.next()) {
-              c_discount = rs.getFloat(1);
-              c_last = rs.getString(2);
-              c_credit = rs.getString(3);
-              w_tax = rs.getFloat(4);
-            }
-          }
-        } catch (SQLException e) {
-          logger.error("SELECT c_discount, c_last, c_credit, w_tax FROM customer, warehouse WHERE w_id = " + w_id + " AND c_w_id = " + w_id + " AND c_d_id = " + d_id + " AND c_id = " + c_id, e);
-          throw new Exception("NewOrder select transaction error", e);
+          String statement = pStmts.getStatement(0);
+          ArrayList<Object> parameters = new ArrayList<>();
+          parameters.add(w_id);
+          parameters.add(w_id);
+          parameters.add(d_id);
+          parameters.add(c_id);
+
+          if (debug)
+            LOGGER.debug("SELECT c_discount, c_last, c_credit, w_tax FROM customer, warehouse WHERE w_id = {} AND c_w_id = {} AND c_d_id = {} AND c_id = {}", w_id, w_id, d_id, c_id);
+
+          List<Map<String, ?>> rs = db.select(statement, parameters);
+          c_discount = (float) rs.get(0).get("c_discount");
+          c_last = (String) rs.get(0).get("c_last");
+          c_credit = (String) rs.get(0).get("c_credit");
+          w_tax = (float) rs.get(0).get("w_tax");
+        } catch (Throwable e) {
+          LOGGER.error("SELECT c_discount, c_last, c_credit, w_tax FROM customer, warehouse WHERE w_id = {} AND c_w_id = {} AND c_d_id = {} AND c_id = {}", w_id, w_id, d_id, c_id, e);
+          return 0;
         }
       } else {
-        logger.debug("joins = false");
-        // Running 2 seperate queries here
         try {
-          int column = 1;
-          //SELECT c_discount, c_last, c_credit FROM customer WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?
-          final PreparedStatement pstmt35 = pStmts.getStatement(35);
-          pstmt35.setInt(column++, w_id);
-          pstmt35.setInt(column++, d_id);
-          pstmt35.setInt(column++, c_id);
+          String statement1 = pStmts.getStatement(35);
+          ArrayList<Object> parameters1 = new ArrayList<>();
+          parameters1.add(w_id);
+          parameters1.add(d_id);
+          parameters1.add(c_id);
 
-          //SELECT w_tax FROM warehouse WHERE w_id = ?
-          final PreparedStatement pstmt36 = pStmts.getStatement(36);
-          pstmt36.setInt(1, w_id);
+          String statement2 = pStmts.getStatement(36);
+          ArrayList<Object> parameters2 = new ArrayList<>();
+          parameters2.add(w_id);
 
-          if (TRACE)
-            logger.trace("SELECT c_discount, c_last, c_credit FROM customer WHERE c_w_id = " + w_id + " AND c_d_id = " + d_id + " AND c_id = " + c_id);
-          if (TRACE)
-            logger.trace("SELECT w_tax FROM warehouse WHERE w_id = " + w_id);
-          try (ResultSet rs0 = pstmt35.executeQuery()) {
-            if (rs0.next()) {
-              c_discount = rs0.getFloat(1);
-              c_last = rs0.getString(2);
-              c_credit = rs0.getString(3);
-            }
-          }
-          try (ResultSet rs1 = pstmt36.executeQuery()) {
-            if (rs1.next()) {
-              w_tax = rs1.getFloat(1);
-            }
-          }
-        } catch (SQLException e) {
-          logger.error("SELECT c_discount, c_last, c_credit FROM customer WHERE c_w_id = " + w_id + " AND c_d_id = " + d_id + " AND c_id = " + c_id, e);
-          throw new Exception("NewOrder (join = false) select transaction error", e);
+          if (debug)
+            LOGGER.debug("SELECT c_discount, c_last, c_credit FROM customer WHERE c_w_id = {} AND c_d_id = {} AND c_id = {}", w_id, d_id, c_id);
+          if (debug)
+            LOGGER.debug("SELECT w_tax FROM warehouse WHERE w_id = {}", w_id);
+
+          List<Map<String, ?>> rs1 = db.select(statement1, parameters1);
+          c_discount = (float) rs1.get(0).get("c_discount");
+          c_last = (String) rs1.get(0).get("c_last");
+          c_credit = (String) rs1.get(0).get("c_credit");
+
+          List<Map<String, ?>> rs2 = db.select(statement1, parameters1);
+          w_tax = (float) rs2.get(0).get("w_tax");
+        } catch (Throwable e) {
+          LOGGER.error("SELECT c_discount, c_last, c_credit FROM customer WHERE c_w_id = {} AND c_d_id = {} AND c_id = {}", w_id, d_id, c_id, e);
+          return 0;
         }
       }
-      //Get prepared statement
-      //"SELECT d_next_o_id, d_tax FROM district WHERE d_id = ? AND d_w_id = ? FOR UPDATE"
 
       try {
-        final PreparedStatement pstmt1 = pStmts.getStatement(1);
-        pstmt1.setInt(1, d_id);
-        pstmt1.setInt(2, w_id);
-        if (TRACE)
-          logger.trace("SELECT d_next_o_id, d_tax FROM district WHERE d_id = " + d_id + "  AND d_w_id = " + w_id + " FOR UPDATE");
-        try (ResultSet rs = pstmt1.executeQuery()) {
-          if (rs.next()) {
-            d_next_o_id = rs.getInt(1);
-            d_tax = rs.getFloat(2);
-          } else {
-            logger.error("Failed to obtain d_next_o_id. No results to query: "
-                + "SELECT d_next_o_id, d_tax FROM district WHERE d_id = " + d_id + "  AND d_w_id = " + w_id + " FOR UPDATE");
-          }
-        }
-      } catch (SQLException e) {
-        logger.error("SELECT d_next_o_id, d_tax FROM district WHERE d_id = " + d_id + "  AND d_w_id = " + w_id + " FOR UPDATE", e);
-        throw new Exception("Neworder select transaction error", e);
-      }
+        String statement = pStmts.getStatement(1);
+        ArrayList<Object> parameters = new ArrayList<>();
+        parameters.add(d_id);
+        parameters.add(w_id);
 
-      //Get prepared statement
-      //"UPDATE district SET d_next_o_id = ? + 1 WHERE d_id = ? AND d_w_id = ?"
+        if (debug)
+          LOGGER.debug("SELECT d_next_o_id, d_tax FROM district WHERE d_id = {}  AND d_w_id = {}", d_id, w_id);
+
+        List<Map<String, ?>> rs = db.select(statement, parameters);
+        d_next_o_id = (int) rs.get(0).get("d_next_o_id");
+        d_tax = (float) rs.get(0).get("d_tax");
+      } catch (Exception e) {
+        LOGGER.error("SELECT d_next_o_id, d_tax FROM district WHERE d_id = {}  AND d_w_id = {} FOR UPDATE", d_id, w_id, e);
+        return 0;
+      }
 
       try {
         final PreparedStatement pstmt2 = pStmts.getStatement(2);
@@ -228,9 +211,6 @@ public class TPCCNewOrder {
       }
 
       o_id = d_next_o_id;
-
-      //Get prepared statement
-      //"INSERT INTO orders (o_id, o_d_id, o_w_id, o_c_id, o_entry_d, o_ol_cnt, o_all_local) VALUES(?, ?, ?, ?, ?, ?, ?)"
 
       try {
         final PreparedStatement pstmt3 = pStmts.getStatement(3);

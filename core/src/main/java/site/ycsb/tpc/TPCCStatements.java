@@ -8,12 +8,12 @@ public class TPCCStatements {
   public void TpccStatements() {
     // NewOrder statements.
     pStmts[0] = "SELECT c.c_discount, c.c_last, c.c_credit, w.w_tax FROM customer AS c JOIN warehouse AS w ON c.c_w_id = w.w_id AND w.w_id = ? AND c.c_w_id = ? AND c.c_d_id = ? AND c.c_id = ?";
-    pStmts[1] = "SELECT d_next_o_id, d_tax FROM district WHERE d_id = ? AND d_w_id = ? FOR UPDATE";
+    pStmts[1] = "SELECT d_next_o_id, d_tax FROM district WHERE d_id = ? AND d_w_id = ?";
     pStmts[2] = "UPDATE district SET d_next_o_id = ? + 1 WHERE d_id = ? AND d_w_id = ?";
     pStmts[3] = "INSERT INTO orders (o_id, o_d_id, o_w_id, o_c_id, o_entry_d, o_ol_cnt, o_all_local) VALUES(?, ?, ?, ?, ?, ?, ?)";
     pStmts[4] = "INSERT INTO new_orders (no_o_id, no_d_id, no_w_id) VALUES (?,?,?)";
     pStmts[5] = "SELECT i_price, i_name, i_data FROM item WHERE i_id = ?";
-    pStmts[6] = "SELECT s_quantity, s_data, s_dist_01, s_dist_02, s_dist_03, s_dist_04, s_dist_05, s_dist_06, s_dist_07, s_dist_08, s_dist_09, s_dist_10 FROM stock WHERE s_i_id = ? AND s_w_id = ? FOR UPDATE";
+    pStmts[6] = "SELECT s_quantity, s_data, s_dist_01, s_dist_02, s_dist_03, s_dist_04, s_dist_05, s_dist_06, s_dist_07, s_dist_08, s_dist_09, s_dist_10 FROM stock WHERE s_i_id = ? AND s_w_id = ?";
     pStmts[7] = "UPDATE stock SET s_quantity = ? WHERE s_i_id = ? AND s_w_id = ?";
     pStmts[8] = "INSERT INTO order_line (ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_dist_info) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
@@ -54,5 +54,9 @@ public class TPCCStatements {
     // These are used in place of pStmts[0] in order to avoid joins
     pStmts[35] = "SELECT c_discount, c_last, c_credit FROM customer WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?";
     pStmts[36] = "SELECT w_tax FROM warehouse WHERE w_id = ?";
+  }
+
+  public String getStatement(int idx) {
+    return pStmts[idx];
   }
 }

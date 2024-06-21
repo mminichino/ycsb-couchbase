@@ -2,9 +2,7 @@ package site.ycsb;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import java.util.Properties;
-import java.util.Set;
-import java.util.Map;
+import java.util.*;
 
 /**
  * SQL Database Driver
@@ -30,11 +28,11 @@ public abstract class SQLDB {
 
   public abstract Status dropTable(String table, Map<String, DataType> columns, Set<String> keys);
 
-  public abstract Status select(String table, String statement);
+  public abstract List<Map<String, ?>> select(String statement, ArrayList<Object> parameters);
 
   public abstract Status insert(Record data);
 
-  public abstract Status update(Record data);
+  public abstract Status update(String statement, ArrayList<Object> parameters);
 
   public abstract Status query(String statement);
 
