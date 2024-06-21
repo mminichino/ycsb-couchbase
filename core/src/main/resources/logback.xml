@@ -38,6 +38,10 @@
     <appender-ref ref="FILE"/>
   </logger>
 
+  <logger name="site.ycsb.db.couchbase3.CouchbaseSQLClient" level="INFO" additivity="false">
+    <appender-ref ref="FILE"/>
+  </logger>
+
   <logger name="site.ycsb.db.couchbase3.CouchbaseConnect" level="INFO" additivity="false">
     <appender-ref ref="FILE"/>
   </logger>

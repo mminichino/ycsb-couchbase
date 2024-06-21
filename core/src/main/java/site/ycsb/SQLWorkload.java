@@ -17,7 +17,13 @@
 
 package site.ycsb;
 
+import ch.qos.logback.classic.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 
@@ -29,13 +35,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * done by init().
  */
 public abstract class SQLWorkload {
+  static final Logger LOGGER =
+      (Logger) LoggerFactory.getLogger("site.ycsb.SQLWorkload");
   private final AtomicBoolean stopRequested = new AtomicBoolean(false);
+  private final List<Future<Status>> tasks = new ArrayList<>();
+  private ExecutorService executor;
+  private boolean debug = false;
 
   /**
    * Initialize the scenario. Create any generators and other shared objects here.
    * Called once, in the main client thread, before any operations are started.
    */
   public void init(Properties p) throws WorkloadException {
+  }
+
+  public void initThreadPool(int count) {
+    executor = Executors.newFixedThreadPool(count);
   }
 
   /**
@@ -83,6 +98,35 @@ public abstract class SQLWorkload {
    * traces from a file, return true when there are more to do, false when you are done.
    */
   public abstract boolean run(SQLDB db, Object threadState);
+
+  public void enableDebug() {
+    debug = true;
+  }
+
+  public void taskAdd(Callable<Status> task) {
+    tasks.add(executor.submit(task));
+  }
+
+  public boolean taskWait() {
+    boolean status = true;
+    for (Future<Status> future : tasks) {
+      try {
+        Status result = future.get();
+//        tasks.remove(future);
+        if (debug) {
+          LOGGER.debug("Task status: {}", result);
+        }
+      } catch (InterruptedException | ExecutionException e) {
+        LOGGER.error(e.getMessage(), e);
+        status = false;
+      }
+    }
+    return status;
+  }
+
+  public void stopThreadPool() {
+    executor.shutdown();
+  }
 
   /**
    * Allows scheduling a request to stop the workload.

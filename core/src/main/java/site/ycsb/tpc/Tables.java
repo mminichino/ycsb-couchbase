@@ -133,7 +133,7 @@ public class Tables {
     put("d_ytd", DataType.FLOAT);
     put("d_next_o_id", DataType.FLOAT);
   }};
-  public static Set<String> districtKeysC = new HashSet<>(List.of("d_id", "d_w_id"));
+  public static Set<String> districtKeysC = new HashSet<>(List.of("d_w_id", "d_id"));
   public static Integer districtScaleFactorC = 10;
 
   public static Map<String, DataType> customerTableC = new HashMap<>() {{
@@ -159,7 +159,7 @@ public class Tables {
     put("c_delivery_cnt", DataType.INTEGER);
     put("c_data", DataType.VARIABLE_STRING.setLength(500));
   }};
-  public static Set<String> customerKeysC = new HashSet<>(List.of("c_id", "c_d_id", "c_w_id"));
+  public static Set<String> customerKeysC = new HashSet<>(List.of("c_w_id", "c_d_id", "c_id"));
   public static Integer customerScaleFactorC = 3000;
 
   public static Map<String, DataType> historyTableC = new HashMap<>() {{
@@ -172,7 +172,7 @@ public class Tables {
     put("h_amount", DataType.FLOAT);
     put("h_data", DataType.VARIABLE_STRING.setLength(24));
   }};
-  public static Set<String> historyKeysC = new HashSet<>(List.of());
+  public static Set<String> historyKeysC = new HashSet<>(List.of("h_c_w_id", "h_c_d_id", "h_c_id"));
   public static Integer historyScaleFactorC = 96000;
 
   public static Map<String, DataType> newOrderTableC = new HashMap<>() {{
@@ -180,7 +180,7 @@ public class Tables {
     put("no_d_id", DataType.IDENTIFIER);
     put("no_w_id", DataType.IDENTIFIER);
   }};
-  public static Set<String> newOrderKeysC = new HashSet<>(List.of("no_o_id", "no_d_id", "no_w_id"));
+  public static Set<String> newOrderKeysC = new HashSet<>(List.of("no_w_id", "no_d_id", "no_o_id"));
   public static Integer newOrderScaleFactorC = 1;
 
   public static Map<String, DataType> orderTableC = new HashMap<>() {{
@@ -193,7 +193,7 @@ public class Tables {
     put("o_ol_cnt", DataType.INTEGER);
     put("o_all_local", DataType.INTEGER);
   }};
-  public static Set<String> orderKeysC = new HashSet<>(List.of("o_id", "o_d_id", "o_w_id"));
+  public static Set<String> orderKeysC = new HashSet<>(List.of("o_w_id", "o_d_id", "o_id"));
   public static Integer orderScaleFactorC = 10000000;
 
   public static Map<String, DataType> orderLineTableC = new HashMap<>() {{

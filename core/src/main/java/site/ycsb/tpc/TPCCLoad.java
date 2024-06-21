@@ -2,17 +2,29 @@ package site.ycsb.tpc;
 
 import site.ycsb.SQLDB;
 import site.ycsb.Record;
+import site.ycsb.Status;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+import org.slf4j.LoggerFactory;
+import ch.qos.logback.classic.Logger;
 
 public final class TPCCLoad {
+  static final Logger LOGGER =
+      (Logger)LoggerFactory.getLogger("site.ycsb.tpc.TPCCLoad");
   private final int maxItems;
   private final int custPerDist;
   private final int distPerWarehouse;
   private final int ordPerDist;
   private final boolean enableDebug;
   private final TPCCUtil util;
+  private final ExecutorService executor;
 
   public static class TPCCLoadBuilder {
     private int maxItems = 100000;
@@ -20,6 +32,7 @@ public final class TPCCLoad {
     private int distPerWarehouse = 10;
     private int ordPerDist = 3000;
     private boolean enableDebug = false;
+    private int threadCount = 32;
 
     public TPCCLoadBuilder maxItems(int value) {
       this.maxItems = value;
@@ -46,6 +59,11 @@ public final class TPCCLoad {
       return this;
     }
 
+    public TPCCLoadBuilder threadCount(int value) {
+      this.threadCount = value;
+      return this;
+    }
+
     public TPCCLoad build() {
       return new TPCCLoad(this);
     }
@@ -58,20 +76,22 @@ public final class TPCCLoad {
     this.ordPerDist = builder.ordPerDist;
     this.enableDebug = builder.enableDebug;
     this.util = new TPCCUtil(custPerDist, ordPerDist);
+    this.executor = Executors.newFixedThreadPool(builder.threadCount);
   }
 
-  public void loadItems(SQLDB db) {
-    int i_id = 0;
-    int i_im_id = 0;
-    String i_name = null;
-    float i_price = 0;
-    String i_data = null;
+  public Stream<Callable<Status>> loadItems(SQLDB db) {
+//    int i_id = 0;
+//    int i_im_id = 0;
+//    String i_name = null;
+//    float i_price = 0;
+//    String i_data = null;
 
     int[] orig = new int[maxItems + 1];
-    int pos = 0;
-    int i = 0;
+    int pos;
+    int i;
+    ArrayList<Callable<Status>> tasks = new ArrayList<>();
 
-    System.out.println("Loading Item");
+    System.out.println("Loading Item Table");
 
     for (i = 0; i < maxItems / 10; i++) {
       orig[i] = 0;
@@ -85,29 +105,36 @@ public final class TPCCLoad {
 
     db.createTable("item", Tables.itemTableC, Tables.itemKeysC);
 
-    for (i_id = 1; i_id <= maxItems; i_id++) {
-      i_im_id = util.randomNumber(1, 10000);
+    for (i = 1; i <= maxItems; i++) {
+      int i_id = i;
+      Callable<Status> task = () -> {
+        int i_im_id = util.randomNumber(1, 10000);
 
-      i_name = util.makeAlphaString(14, 24);
+        String i_name = util.makeAlphaString(14, 24);
 
-      i_price = (float) (util.randomNumber(100, 10000) / 100.0);
+        float i_price = (float) (util.randomNumber(100, 10000) / 100.0);
 
-      i_data = util.makeAlphaString(26, 50);
-      if (orig[i_id] != 0) {
-        pos = util.randomNumber(0, i_data.length() - 8);
-        i_data = i_data.substring(0, pos) + "original" + i_data.substring(pos + 8);
-      }
+        String i_data = util.makeAlphaString(26, 50);
 
-      Record record = new Record();
-      record.add("i_id", i_id);
-      record.add("i_im_id", i_im_id);
-      record.add("i_name", i_name);
-      record.add("i_price", i_price);
-      record.add("i_data", i_data);
-      db.insert("item", record);
+        if (orig[i_id] != 0) {
+          int position = util.randomNumber(0, i_data.length() - 8);
+          i_data = i_data.substring(0, position) + "original" + i_data.substring(position + 8);
+        }
+
+        Record record = new Record();
+        record.setKey(Tables.itemKeysC);
+        record.add("i_id", i_id);
+        record.add("i_im_id", i_im_id);
+        record.add("i_name", i_name);
+        record.add("i_price", i_price);
+        record.add("i_data", i_data);
+        return db.insert("item", record);
+      };
+      tasks.add(task);
     }
 
-    System.out.println("Item Done");
+    System.out.println("Item Table Load Complete");
+    return tasks.stream();
   }
 
   public void loadWare(SQLDB db, int min_ware, int max_ware) {
@@ -146,6 +173,7 @@ public final class TPCCLoad {
       }
 
       Record record = new Record();
+      record.setKey(Tables.warehouseKeysC);
       record.add("w_id", w_id);
       record.add("w_name", w_name);
       record.add("w_street_1", w_street_1);
@@ -245,6 +273,7 @@ public final class TPCCLoad {
       }
 
       Record record = new Record();
+      record.setKey(Tables.stockKeysC);
       record.add("s_i_id", s_i_id);
       record.add("s_w_id", s_w_id);
       record.add("s_quantity", s_quantity);
@@ -304,6 +333,7 @@ public final class TPCCLoad {
       d_tax = (float) (((float) util.randomNumber(10, 20)) / 100.0);
 
       Record record = new Record();
+      record.setKey(Tables.districtKeysC);
       record.add("d_id", d_id);
       record.add("d_w_id", d_w_id);
       record.add("d_name", d_name);
@@ -388,6 +418,7 @@ public final class TPCCLoad {
 
       try {
         Record record = new Record();
+        record.setKey(Tables.customerKeysC);
         record.add("c_id", c_id);
         record.add("c_d_id", c_d_id);
         record.add("c_w_id", c_w_id);
@@ -419,6 +450,7 @@ public final class TPCCLoad {
 
       try {
         Record record = new Record();
+        record.setKey(Tables.historyKeysC);
         record.add("h_c_id", c_id);
         record.add("h_c_d_id", c_d_id);
         record.add("h_c_w_id", c_w_id);
@@ -473,6 +505,7 @@ public final class TPCCLoad {
 
       if (o_id > 2100) {
         Record record = new Record();
+        record.setKey(Tables.orderKeysC);
         record.add("o_id", o_id);
         record.add("o_d_id", o_d_id);
         record.add("o_w_id", o_w_id);
@@ -484,12 +517,14 @@ public final class TPCCLoad {
         db.insert("orders", record);
 
         record = new Record();
+        record.setKey(Tables.newOrderKeysC);
         record.add("no_o_id", o_id);
         record.add("no_d_id", o_d_id);
         record.add("no_w_id", o_w_id);
         db.insert("new_orders", record);
       } else {
         Record record = new Record();
+        record.setKey(Tables.orderKeysC);
         record.add("o_id", o_id);
         record.add("o_d_id", o_d_id);
         record.add("o_w_id", o_w_id);
@@ -517,6 +552,7 @@ public final class TPCCLoad {
 
         if (o_id > 2100) {
           Record record = new Record();
+          record.setKey(Tables.orderLineKeysC);
           record.add("ol_o_id", o_id);
           record.add("ol_d_id", o_d_id);
           record.add("ol_w_id", o_w_id);
@@ -530,6 +566,7 @@ public final class TPCCLoad {
           db.insert("order_line", record);
         } else {
           Record record = new Record();
+          record.setKey(Tables.orderLineKeysC);
           record.add("ol_o_id", o_id);
           record.add("ol_d_id", o_d_id);
           record.add("ol_w_id", o_w_id);

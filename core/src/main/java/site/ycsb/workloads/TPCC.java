@@ -6,6 +6,7 @@ import site.ycsb.WorkloadException;
 import site.ycsb.tpc.TPCCLoad;
 
 import java.util.Properties;
+import java.util.concurrent.Callable;
 
 public class TPCC extends SQLWorkload {
   public static final String TPCC_TRANSACTION_COUNT = "tpcc.transactionCount";
@@ -34,6 +35,7 @@ public class TPCC extends SQLWorkload {
     ordPerDist = Integer.parseInt(p.getProperty("tpcc.ordPerDist", "3000"));
     maxNumItems = Integer.parseInt(p.getProperty("tpcc.maxNumItems", "15"));
     maxItemLen = Integer.parseInt(p.getProperty("tpcc.maxItemLen", "24"));
+    initThreadPool(32);
   }
 
   @Override
@@ -45,7 +47,15 @@ public class TPCC extends SQLWorkload {
         .ordPerDist(ordPerDist)
         .maxItems(maxItems)
         .enableDebug(enableDebug)
+        .threadCount(32)
         .build();
+
+//    tpcc.loadItems(db);
+    tpcc.loadItems(db).forEach(this::taskAdd);
+    taskWait();
+//    tpcc.loadWare(db, 1, 1);
+//    tpcc.loadCust(db, 1, 1);
+//    tpcc.loadOrd(db, 1);
     return false;
   }
 

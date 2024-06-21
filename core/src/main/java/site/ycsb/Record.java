@@ -2,14 +2,21 @@ package site.ycsb;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.commons.lang3.ObjectUtils;
+
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class Record {
   private final ObjectNode data;
+  private Set<String> primaryKey;
 
   public Record() {
     ObjectMapper mapper = new ObjectMapper();
     this.data = mapper.createObjectNode();
+  }
+
+  public void setKey(Set<String> key) {
+    primaryKey = key;
   }
 
   public void add(String field, int value) {
@@ -44,7 +51,19 @@ public class Record {
     this.data.putNull(field);
   }
 
+  public String getString(String key) {
+    return this.data.get(key).asText();
+  }
+
+  public Set<String> getKeyValues() {
+    return primaryKey.stream().map(this::getString).collect(Collectors.toSet());
+  }
+
   public ObjectNode contents() {
     return this.data;
+  }
+
+  public Set<String> getKey() {
+    return this.primaryKey;
   }
 }
