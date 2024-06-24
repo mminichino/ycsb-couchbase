@@ -25,6 +25,7 @@ import com.couchbase.client.java.http.HttpResponse;
 import com.couchbase.client.java.http.HttpTarget;
 import com.couchbase.client.java.kv.*;
 import com.couchbase.client.java.manager.bucket.*;
+import com.couchbase.client.java.manager.collection.CollectionManager;
 import com.couchbase.client.java.manager.query.CollectionQueryIndexManager;
 import com.couchbase.client.java.manager.query.CreatePrimaryQueryIndexOptions;
 import com.couchbase.client.java.manager.query.CreateQueryIndexOptions;
@@ -408,6 +409,13 @@ public final class CouchbaseConnect {
     }
     Bucket check = cluster.bucket(bucket);
     check.waitUntilReady(Duration.ofSeconds(15));
+  }
+
+  public void createCollection(String bucketName, String scopeName, String collectionName) {
+    bucketMgr.getBucket(bucketName);
+    bucket = cluster.bucket(bucketName);
+    CollectionManager collectionManager = bucket.collections();
+    collectionManager.createCollection(scopeName, collectionName);
   }
 
   public void dropBucket(String bucket) {
