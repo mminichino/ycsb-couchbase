@@ -33,6 +33,7 @@ import com.couchbase.client.java.ClusterOptions;
 import com.couchbase.client.java.Collection;
 import com.couchbase.client.java.codec.RawJsonTranscoder;
 import com.couchbase.client.java.codec.Transcoder;
+import com.couchbase.client.java.codec.TypeRef;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.java.json.JsonArray;
 import com.couchbase.client.java.query.QueryResult;
@@ -92,6 +93,7 @@ public class CouchbaseQuery extends DB {
   private boolean arrayMode;
   private String arrayKey;
   private Transcoder transcoder;
+  private MapSerializer serializer;
   private Class<?> contentType;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
 
@@ -259,7 +261,13 @@ public class CouchbaseQuery extends DB {
       QueryResult response = cluster.query(statement, queryOptions()
           .adhoc(adhoc)
           .maxParallelism(maxParallelism)
+          .serializer(serializer)
           .retryStrategy(FailFastRetryStrategy.INSTANCE));
+      TypeRef<Map<String, ByteIterator>> typeRef = new TypeRef<>() {};
+      result = response.rowsAs(typeRef).get(0);
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug(result.toString());
+      }
       return response.metaData().status() == QueryStatus.SUCCESS ? Status.OK : Status.ERROR;
     } catch (DocumentNotFoundException e) {
       return Status.NOT_FOUND;
