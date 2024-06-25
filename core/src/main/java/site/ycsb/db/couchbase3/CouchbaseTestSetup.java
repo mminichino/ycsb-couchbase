@@ -13,6 +13,8 @@ public class CouchbaseTestSetup extends TestSetup {
   public static final String CLUSTER_PASSWORD = "couchbase.password";
   public static final String CLUSTER_SSL = "couchbase.sslMode";
   public static final String CLUSTER_BUCKET = "couchbase.bucket";
+  public static final String CLUSTER_SCOPE = "couchbase.scope";
+  public static final String CLUSTER_COLLECTION = "couchbase.collection";
   public static final String CLUSTER_PROJECT = "couchbase.project";
   public static final String CLUSTER_DATABASE = "couchbase.database";
   public static final String CLUSTER_EVENTING = "couchbase.eventing";
@@ -23,6 +25,8 @@ public class CouchbaseTestSetup extends TestSetup {
   public static final String XDCR_PASSWORD = "xdcr.password";
   public static final String XDCR_SSL = "xdcr.sslMode";
   public static final String XDCR_BUCKET = "xdcr.bucket";
+  public static final String XDCR_SCOPE = "xdcr.scope";
+  public static final String XDCR_COLLECTION = "xdcr.collection";
   public static final String XDCR_PROJECT = "xdcr.project";
   public static final String XDCR_DATABASE = "xdcr.database";
   public static final String XDCR_EVENTING = "xdcr.eventing";
@@ -38,6 +42,8 @@ public class CouchbaseTestSetup extends TestSetup {
     String clusterPassword = properties.getProperty(CLUSTER_PASSWORD, CouchbaseConnect.DEFAULT_PASSWORD);
     boolean clusterSsl = properties.getProperty(CLUSTER_SSL, CouchbaseConnect.DEFAULT_SSL_SETTING).equals("true");
     String clusterBucket = properties.getProperty(CLUSTER_BUCKET, "ycsb");
+    String clusterScope = properties.getProperty(CLUSTER_SCOPE, "_default");
+    String clusterCollection = properties.getProperty(CLUSTER_COLLECTION, "usertable");
     String clusterProject = properties.getProperty(CLUSTER_PROJECT, null);
     String clusterDatabase = properties.getProperty(CLUSTER_DATABASE, null);
     String clusterEventing = properties.getProperty(CLUSTER_EVENTING, null);
@@ -49,6 +55,8 @@ public class CouchbaseTestSetup extends TestSetup {
     String xdcrPassword = properties.getProperty(XDCR_PASSWORD, CouchbaseConnect.DEFAULT_PASSWORD);
     boolean xdcrSsl = properties.getProperty(XDCR_SSL, CouchbaseConnect.DEFAULT_SSL_SETTING).equals("true");
     String xdcrBucket = properties.getProperty(XDCR_BUCKET, "ycsb");
+    String xdcrScope = properties.getProperty(XDCR_SCOPE, "_default");
+    String xdcrCollection = properties.getProperty(XDCR_COLLECTION, "usertable");
     String xdcrProject = properties.getProperty(XDCR_PROJECT, null);
     String xdcrDatabase = properties.getProperty(XDCR_DATABASE, null);
     String xdcrEventing = properties.getProperty(XDCR_EVENTING, null);
@@ -60,24 +68,24 @@ public class CouchbaseTestSetup extends TestSetup {
 
     System.err.println("Starting test setup");
 
-    clusterSetup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterBucketType,
-            clusterReplicaNum, clusterProject, clusterDatabase, indexCreate, indexField, clusterEventing);
+    clusterSetup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterScope, clusterCollection,
+        clusterBucketType, clusterReplicaNum, clusterProject, clusterDatabase, indexCreate, indexField, clusterEventing);
 
     if (clusterEventing != null) {
       eventingSetup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterEventing);
     }
 
     if (xdcrHost != null) {
-      clusterSetup(xdcrHost, xdcrUser, xdcrPassword, xdcrSsl, xdcrBucket, xdcrBucketType, xdcrReplicaNum,
-          xdcrProject, xdcrDatabase, indexCreate, indexField, xdcrEventing);
+      clusterSetup(xdcrHost, xdcrUser, xdcrPassword, xdcrSsl, xdcrBucket, xdcrScope, xdcrCollection, xdcrBucketType,
+          xdcrReplicaNum, xdcrProject, xdcrDatabase, indexCreate, indexField, xdcrEventing);
       replicationSetup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket,
           xdcrHost, xdcrUser, xdcrPassword, xdcrSsl, xdcrBucket);
     }
   }
 
-  private static void clusterSetup(String host, String user, String password, boolean ssl, String bucket, int type,
-                                   int replicas, String project, String database, boolean index, String field,
-                                   String eventing) {
+  private static void clusterSetup(String host, String user, String password, boolean ssl, String bucket, String scope,
+                                   String collection, int type, int replicas, String project, String database,
+                                   boolean index, String field, String eventing) {
     CouchbaseConnect.CouchbaseBuilder dbBuilder = new CouchbaseConnect.CouchbaseBuilder();
     CouchbaseConnect db;
     String typeText = type == 1 ? "Magma" : "Couchstore";
@@ -96,6 +104,12 @@ public class CouchbaseTestSetup extends TestSetup {
       }
       System.err.printf("Creating bucket %s (%s) on cluster:[%s]\n", bucket, typeText, host);
       db.createBucket(bucket, replicas, type);
+      System.err.printf("Creating collection %s\n", collection);
+      db.createCollection(bucket, scope, collection);
+      if (db.isAnalyticsEnabled()) {
+        System.err.printf("Creating analytics collection %s\n", bucket);
+        db.createAnalyticsCollection(bucket);
+      }
       if (index) {
         System.err.printf("Creating index on field %s\n", field);
         db.createFieldIndex(field);
