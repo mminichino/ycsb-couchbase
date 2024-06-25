@@ -109,6 +109,11 @@ public class CouchbaseTestSetup extends TestSetup {
       if (db.isAnalyticsEnabled()) {
         System.err.printf("Creating analytics collection %s\n", bucket);
         db.createAnalyticsCollection(bucket);
+        System.err.println("Creating analytics indexes");
+        db.createAnalyticsIntIndex(bucket, "record");
+        db.createAnalyticsStrIndex(bucket, "id");
+        db.createFieldIndex("record");
+        db.createFieldIndex("id");
       }
       if (index) {
         System.err.printf("Creating index on field %s\n", field);

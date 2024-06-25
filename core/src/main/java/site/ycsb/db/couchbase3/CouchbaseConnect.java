@@ -24,16 +24,17 @@ import com.couchbase.client.java.http.HttpPath;
 import com.couchbase.client.java.http.HttpResponse;
 import com.couchbase.client.java.http.HttpTarget;
 import com.couchbase.client.java.kv.*;
-import com.couchbase.client.java.manager.analytics.AnalyticsDataset;
+import com.couchbase.client.java.manager.analytics.AnalyticsDataType;
 import com.couchbase.client.java.manager.bucket.*;
 import com.couchbase.client.java.manager.collection.CollectionManager;
 import com.couchbase.client.java.manager.query.CollectionQueryIndexManager;
 import com.couchbase.client.java.manager.query.CreatePrimaryQueryIndexOptions;
 import com.couchbase.client.java.manager.query.CreateQueryIndexOptions;
 import com.couchbase.client.java.manager.analytics.AnalyticsIndexManager;
-import com.couchbase.client.java.manager.analytics.AnalyticsDataverse;
 import static com.couchbase.client.java.manager.analytics.CreateDatasetAnalyticsOptions.createDatasetAnalyticsOptions;
 import static com.couchbase.client.java.manager.analytics.DropDatasetAnalyticsOptions.dropDatasetAnalyticsOptions;
+import static com.couchbase.client.java.manager.analytics.CreateIndexAnalyticsOptions.createIndexAnalyticsOptions;
+import static com.couchbase.client.java.manager.analytics.DropIndexAnalyticsOptions.dropIndexAnalyticsOptions;
 import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
 import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
 import static com.couchbase.client.java.kv.MutateInOptions.mutateInOptions;
@@ -430,6 +431,25 @@ public final class CouchbaseConnect {
 
   public void dropAnalyticsCollection(String bucketName) {
     analytics.dropDataset(bucketName, dropDatasetAnalyticsOptions().ignoreIfNotExists(true));
+  }
+
+  public void createAnalyticsIntIndex(String bucketName, String fieldName) {
+    Map<String,AnalyticsDataType> fieldMap = new HashMap<>();
+    fieldMap.put(fieldName, AnalyticsDataType.INT64);
+    String indexName = bucketName + "_" + fieldName + "_idx";
+    analytics.createIndex(indexName, bucketName, fieldMap, createIndexAnalyticsOptions().ignoreIfExists(true));
+  }
+
+  public void createAnalyticsStrIndex(String bucketName, String fieldName) {
+    Map<String,AnalyticsDataType> fieldMap = new HashMap<>();
+    fieldMap.put(fieldName, AnalyticsDataType.STRING);
+    String indexName = bucketName + "_" + fieldName + "_idx";
+    analytics.createIndex(indexName, bucketName, fieldMap, createIndexAnalyticsOptions().ignoreIfExists(true));
+  }
+
+  public void dropAnalyticsIndex(String bucketName, String fieldName) {
+    String indexName = bucketName + "_" + fieldName + "_idx";
+    analytics.dropIndex(indexName, bucketName, dropIndexAnalyticsOptions().ignoreIfNotExists(true));
   }
 
   public void createCollection(String bucketName, String scopeName, String collectionName) {

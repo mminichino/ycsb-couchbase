@@ -258,7 +258,7 @@ public class CouchbaseQuery extends DB {
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     String fieldSpec = fields != null ? String.join(",", fields) : "*";
-    String statement = "SELECT " + fieldSpec + " FROM " + keyspace() + " WHERE meta().id IN " + "[\"" + key + "\"]";
+    String statement = "SELECT " + fieldSpec + " FROM " + keyspace() + " WHERE id = \"" + key + "\"";
     try {
       return retryBlock(() -> {
         QueryResult response = cluster.query(statement, queryOptions()
@@ -417,7 +417,7 @@ public class CouchbaseQuery extends DB {
     Vector<Object> results = new Vector<>();
     try {
       return retryBlock(() -> {
-        final String query = "select raw meta().id from `" + bucketName + "` where meta().id >= \"$1\" limit $2;";
+        final String query = "select raw id from " + keyspace() + " where id >= \"$1\" limit $2;";
         cluster.reactive().query(query, queryOptions()
                 .pipelineBatch(128)
                 .pipelineCap(1024)
