@@ -93,7 +93,7 @@ public class CouchbaseQuery extends DB {
   private boolean arrayMode;
   private String arrayKey;
   private Transcoder transcoder;
-  private MapSerializer serializer;
+  private final MapSerializer serializer = new MapSerializer();
   private Class<?> contentType;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
 
@@ -256,19 +256,22 @@ public class CouchbaseQuery extends DB {
    */
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
-    String statement = "SELECT " + String.join(",", fields) + " FROM " + keyspace() + " WHERE meta().id IN " + "[\"" + key + "\"]";
+    String fieldSpec = fields != null ? String.join(",", fields) : "*";
+    String statement = "SELECT " + fieldSpec + " FROM " + keyspace() + " WHERE meta().id IN " + "[\"" + key + "\"]";
     try {
-      QueryResult response = cluster.query(statement, queryOptions()
-          .adhoc(adhoc)
-          .maxParallelism(maxParallelism)
-          .serializer(serializer)
-          .retryStrategy(FailFastRetryStrategy.INSTANCE));
-      TypeRef<Map<String, ByteIterator>> typeRef = new TypeRef<>() {};
-      result = response.rowsAs(typeRef).get(0);
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug(result.toString());
-      }
-      return response.metaData().status() == QueryStatus.SUCCESS ? Status.OK : Status.ERROR;
+      return retryBlock(() -> {
+        QueryResult response = cluster.query(statement, queryOptions()
+            .adhoc(adhoc)
+            .maxParallelism(maxParallelism)
+            .serializer(serializer)
+            .retryStrategy(FailFastRetryStrategy.INSTANCE));
+        TypeRef<Map<String, Map<String, ByteIterator>>> typeRef = new TypeRef<>() {};
+        Map<String, Map<String, ByteIterator>> r = response.rowsAs(typeRef).get(0);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug(r.toString());
+        }
+        return response.metaData().status() == QueryStatus.SUCCESS ? Status.OK : Status.ERROR;
+      });
     } catch (DocumentNotFoundException e) {
       return Status.NOT_FOUND;
     } catch (Throwable t) {

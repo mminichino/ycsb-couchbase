@@ -9,12 +9,13 @@ import static com.couchbase.client.core.logging.RedactableArgument.redactUser;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 
-import java.nio.charset.StandardCharsets;
-
 import site.ycsb.ByteIterator;
+
+import java.util.Arrays;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -55,9 +56,10 @@ public class MapSerializer implements JsonSerializer {
     mapper.registerModule(module);
     JavaType type = mapper.getTypeFactory().constructType(target.type());
     try {
-      return mapper.readValue(new String(input, StandardCharsets.UTF_8), type);
+      return mapper.readValue(input, type);
     } catch (Throwable e) {
-      throw new DecodingFailureException(e);
+      throw new DecodingFailureException("Deserialization of content into target " + target
+          + " failed; encoded = " + redactUser(new String(input, UTF_8)), e);
     }
   }
 }
