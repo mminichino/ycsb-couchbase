@@ -36,18 +36,17 @@ import com.couchbase.client.java.codec.Transcoder;
 import com.couchbase.client.java.codec.TypeRef;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.java.json.JsonArray;
+import com.couchbase.client.java.json.JsonObject;
 import com.couchbase.client.java.query.QueryResult;
 import com.couchbase.client.java.query.QueryStatus;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.LoggerFactory;
-import site.ycsb.ByteIterator;
-import site.ycsb.DB;
-import site.ycsb.DBException;
-import site.ycsb.Status;
+import site.ycsb.*;
 
 import java.io.IOException;
 import java.net.URL;
@@ -55,6 +54,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import static com.couchbase.client.java.kv.GetOptions.getOptions;
@@ -96,6 +96,7 @@ public class CouchbaseQuery extends DB {
   private final MapSerializer serializer = new MapSerializer();
   private Class<?> contentType;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
+  private static final AtomicLong recordNumber = new AtomicLong(0);
 
   @Override
   public void init() throws DBException {
@@ -263,10 +264,8 @@ public class CouchbaseQuery extends DB {
         QueryResult response = cluster.query(statement, queryOptions()
             .adhoc(adhoc)
             .maxParallelism(maxParallelism)
-            .serializer(serializer)
             .retryStrategy(FailFastRetryStrategy.INSTANCE));
-        TypeRef<Map<String, Map<String, ByteIterator>>> typeRef = new TypeRef<>() {};
-        Map<String, Map<String, ByteIterator>> r = response.rowsAs(typeRef).get(0);
+        JsonObject r = response.rowsAsObject().get(0);
         if (LOGGER.isDebugEnabled()) {
           LOGGER.debug(r.toString());
         }
@@ -288,14 +287,23 @@ public class CouchbaseQuery extends DB {
    */
   @Override
   public Status update(final String table, final String key, final Map<String, ByteIterator> values) {
-    String contents = toJson(values);
+    ObjectMapper mapper = new ObjectMapper();
+    String json;
 
-    if (contents == null) {
+    ObjectNode contents = toJson(values);
+
+    try {
+      json = mapper.writeValueAsString(contents);
+    } catch (JsonProcessingException e) {
+      json = null;
+    }
+
+    if (json == null) {
       LOGGER.error("Update: Can not serialize values: {}", values);
       return Status.ERROR;
     }
 
-    String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (\"" + key + "\"," + contents + ")";
+    String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (\"" + key + "\"," + json + ")";
     try {
       return retryBlock(() -> {
         QueryResult result = cluster.query(statement, queryOptions()
@@ -318,14 +326,25 @@ public class CouchbaseQuery extends DB {
    */
   @Override
   public Status insert(final String table, final String key, final Map<String, ByteIterator> values) {
-    String contents = toJson(values);
+    ObjectMapper mapper = new ObjectMapper();
+    String json;
 
-    if (contents == null) {
+    ObjectNode contents = toJson(values);
+    contents.put("id", key);
+    contents.put("record", recordNumber.incrementAndGet());
+
+    try {
+      json = mapper.writeValueAsString(contents);
+    } catch (JsonProcessingException e) {
+      json = null;
+    }
+
+    if (json == null) {
       LOGGER.error("Insert: Can not serialize values: {}", values);
       return Status.ERROR;
     }
 
-    String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (\"" + key + "\"," + contents + ")";
+    String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (\"" + key + "\"," + json + ")";
     try {
       return retryBlock(() -> {
         QueryResult result = cluster.query(statement, queryOptions()
@@ -354,16 +373,12 @@ public class CouchbaseQuery extends DB {
     return result;
   }
 
-  private static String toJson(final Map<String, ByteIterator> values) {
+  private static ObjectNode toJson(final Map<String, ByteIterator> values) {
     ObjectMapper mapper = new ObjectMapper();
     SimpleModule module = new SimpleModule("ByteIteratorSerializer");
     module.addSerializer(ByteIterator.class, new ByteIteratorSerializer());
     mapper.registerModule(module);
-    try {
-      return mapper.writeValueAsString(values);
-    } catch (JsonProcessingException e) {
-      return null;
-    }
+    return mapper.valueToTree(values);
   }
 
   private static String keyspace() {

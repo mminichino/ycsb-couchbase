@@ -24,11 +24,16 @@ import com.couchbase.client.java.http.HttpPath;
 import com.couchbase.client.java.http.HttpResponse;
 import com.couchbase.client.java.http.HttpTarget;
 import com.couchbase.client.java.kv.*;
+import com.couchbase.client.java.manager.analytics.AnalyticsDataset;
 import com.couchbase.client.java.manager.bucket.*;
 import com.couchbase.client.java.manager.collection.CollectionManager;
 import com.couchbase.client.java.manager.query.CollectionQueryIndexManager;
 import com.couchbase.client.java.manager.query.CreatePrimaryQueryIndexOptions;
 import com.couchbase.client.java.manager.query.CreateQueryIndexOptions;
+import com.couchbase.client.java.manager.analytics.AnalyticsIndexManager;
+import com.couchbase.client.java.manager.analytics.AnalyticsDataverse;
+import static com.couchbase.client.java.manager.analytics.CreateDatasetAnalyticsOptions.createDatasetAnalyticsOptions;
+import static com.couchbase.client.java.manager.analytics.DropDatasetAnalyticsOptions.dropDatasetAnalyticsOptions;
 import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
 import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
 import static com.couchbase.client.java.kv.MutateInOptions.mutateInOptions;
@@ -54,6 +59,7 @@ public final class CouchbaseConnect {
   private volatile Collection collection;
   private volatile ClusterEnvironment environment;
   private volatile BucketManager bucketMgr;
+  private volatile AnalyticsIndexManager analytics;
   public static final String DEFAULT_USER = "Administrator";
   public static final String DEFAULT_PASSWORD = "password";
   public static final String DEFAULT_HOSTNAME = "127.0.0.1";
@@ -80,6 +86,7 @@ public final class CouchbaseConnect {
   private JsonObject clusterInfo = new JsonObject();
   private final boolean scopeEnabled;
   private final boolean collectionEnabled;
+  private boolean analyticsEnabled;
   private final DurabilityLevel durability;
   private final int ttlSeconds;
   private boolean communityEdition = false;
@@ -196,6 +203,7 @@ public final class CouchbaseConnect {
     collectionName = builder.collectionName;
     scopeEnabled = !Objects.equals(scopeName, "_default");
     collectionEnabled = !Objects.equals(collectionName, "_default");
+    analyticsEnabled = false;
     connect();
   }
 
@@ -347,6 +355,11 @@ public final class CouchbaseConnect {
       JsonObject entry = new JsonObject();
       entry.addProperty("hostname", hostname);
       entry.add("services", services);
+      boolean result = services.asList().stream().anyMatch(e -> e.getAsString().equals("cbas"));
+      if (result) {
+        analyticsEnabled = true;
+        analytics = new AnalyticsIndexManager(cluster);
+      }
 
       hostMap.add(entry);
     }
@@ -411,11 +424,26 @@ public final class CouchbaseConnect {
     check.waitUntilReady(Duration.ofSeconds(15));
   }
 
+  public void createAnalyticsCollection(String bucketName) {
+    analytics.createDataset(bucketName, bucketName, createDatasetAnalyticsOptions().ignoreIfExists(true));
+  }
+
+  public void dropAnalyticsCollection(String bucketName) {
+    analytics.dropDataset(bucketName, dropDatasetAnalyticsOptions().ignoreIfNotExists(true));
+  }
+
   public void createCollection(String bucketName, String scopeName, String collectionName) {
+    if (Objects.equals(collectionName, "_default")) {
+      return;
+    }
     bucketMgr.getBucket(bucketName);
     bucket = cluster.bucket(bucketName);
     CollectionManager collectionManager = bucket.collections();
     collectionManager.createCollection(scopeName, collectionName);
+  }
+
+  public boolean isAnalyticsEnabled() {
+    return analyticsEnabled;
   }
 
   public void dropBucket(String bucket) {

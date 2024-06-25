@@ -17,7 +17,6 @@ public class CouchbaseQuerySetup extends TestSetup {
   public static final String CLUSTER_COLLECTION = "couchbase.collection";
   public static final String CLUSTER_PROJECT = "couchbase.project";
   public static final String CLUSTER_DATABASE = "couchbase.database";
-  public static final String CLUSTER_EVENTING = "couchbase.eventing";
   public static final String CLUSTER_BUCKET_TYPE = "couchbase.bucketType";
   public static final String CLUSTER_REPLICA_NUM = "couchbase.replicaNum";
   public static final String INDEX_CREATE = "index.create";
@@ -65,6 +64,10 @@ public class CouchbaseQuerySetup extends TestSetup {
       db.createBucket(bucket, replicas, type);
       System.err.printf("Creating collection %s\n", collection);
       db.createCollection(bucket, scope, collection);
+      if (db.isAnalyticsEnabled()) {
+        System.err.printf("Creating analytics collection %s\n", bucket);
+        db.createAnalyticsCollection(bucket);
+      }
       if (index) {
         System.err.printf("Creating index on field %s\n", field);
         db.createFieldIndex(field);
