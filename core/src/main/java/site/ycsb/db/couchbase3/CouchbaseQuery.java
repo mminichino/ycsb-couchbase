@@ -25,25 +25,19 @@ import com.couchbase.client.core.env.NetworkResolution;
 import com.couchbase.client.core.env.SecurityConfig;
 import com.couchbase.client.core.env.TimeoutConfig;
 import com.couchbase.client.core.error.DocumentNotFoundException;
-import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.core.retry.FailFastRetryStrategy;
-import com.couchbase.client.java.Bucket;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.ClusterOptions;
-import com.couchbase.client.java.Collection;
-import com.couchbase.client.java.codec.RawJsonTranscoder;
-import com.couchbase.client.java.codec.Transcoder;
-import com.couchbase.client.java.codec.TypeRef;
+import com.couchbase.client.java.analytics.AnalyticsResult;
+import com.couchbase.client.java.analytics.AnalyticsStatus;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.java.json.JsonArray;
 import com.couchbase.client.java.json.JsonObject;
 import com.couchbase.client.java.query.QueryResult;
 import com.couchbase.client.java.query.QueryStatus;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.LoggerFactory;
 import site.ycsb.*;
@@ -57,10 +51,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-import static com.couchbase.client.java.kv.GetOptions.getOptions;
-import static com.couchbase.client.java.kv.MutateInOptions.mutateInOptions;
-import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
-import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
+import static com.couchbase.client.java.analytics.AnalyticsOptions.analyticsOptions;
 import static com.couchbase.client.java.query.QueryOptions.queryOptions;
 
 /**
@@ -81,21 +72,13 @@ public class CouchbaseQuery extends DB {
   private static final AtomicInteger OPEN_CLIENTS = new AtomicInteger(0);
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Cluster cluster;
-  private static volatile Bucket bucket;
-  private static volatile Collection collection;
   private static volatile ClusterEnvironment environment;
   private static String bucketName;
   private static String scopeName;
   private static String collectionName;
   private boolean adhoc;
   private int maxParallelism;
-  private static int ttlSeconds;
-  private boolean arrayMode;
-  private String arrayKey;
-  private Transcoder transcoder;
-  private final MapSerializer serializer = new MapSerializer();
-  private Class<?> contentType;
-  private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
+  private boolean analyticsMode;
   private static final AtomicLong recordNumber = new AtomicLong(0);
 
   @Override
@@ -129,21 +112,7 @@ public class CouchbaseQuery extends DB {
       LOGGER.setLevel(Level.DEBUG);
     }
 
-    boolean nativeCodec = getProperties().getProperty("couchbase.codec", "ycsb").equals("native");
-
-    if (nativeCodec) {
-      transcoder = RawJsonTranscoder.INSTANCE;
-      contentType = String.class;
-    } else {
-      transcoder = MapTranscoder.INSTANCE;
-      contentType = Map.class;
-    }
-
-    durability =
-        setDurabilityLevel(Integer.parseInt(properties.getProperty("couchbase.durability", "0")));
-
-    arrayMode = properties.getProperty("couchbase.mode", "default").equals("array");
-    arrayKey = properties.getProperty("subdoc.arrayKey", "DataArray");
+    analyticsMode = properties.getProperty("couchbase.analytics", "false").equals("true");
 
     adhoc = properties.getProperty("couchbase.adhoc", "false").equals("true");
     maxParallelism = Integer.parseInt(properties.getProperty("couchbase.maxParallelism", "0"));
@@ -152,8 +121,6 @@ public class CouchbaseQuery extends DB {
     long kvTimeout = Long.parseLong(properties.getProperty("couchbase.kvTimeout", "5"));
     long connectTimeout = Long.parseLong(properties.getProperty("couchbase.connectTimeout", "5"));
     long queryTimeout = Long.parseLong(properties.getProperty("couchbase.queryTimeout", "75"));
-
-    ttlSeconds = Integer.parseInt(properties.getProperty("couchbase.ttlSeconds", "0"));
 
     if (sslMode) {
       couchbasePrefix = "couchbases://";
@@ -189,8 +156,6 @@ public class CouchbaseQuery extends DB {
               .build();
           cluster = Cluster.connect(connectString,
               ClusterOptions.clusterOptions(username, password).environment(environment));
-          bucket = cluster.bucket(bucketName);
-          collection = bucket.scope(scopeName).collection(collectionName);
         }
       } catch(Exception e) {
         logError(e, connectString);
@@ -205,19 +170,6 @@ public class CouchbaseQuery extends DB {
     LOGGER.error(cluster.environment().toString());
     LOGGER.error(cluster.diagnostics().endpoints().toString());
     LOGGER.error(error.getMessage(), error);
-  }
-
-  private DurabilityLevel setDurabilityLevel(final int value) {
-    switch(value){
-      case 1:
-        return DurabilityLevel.MAJORITY;
-      case 2:
-        return DurabilityLevel.MAJORITY_AND_PERSIST_TO_ACTIVE;
-      case 3:
-        return DurabilityLevel.PERSIST_TO_MAJORITY;
-      default :
-        return DurabilityLevel.NONE;
-    }
   }
 
   @Override
@@ -248,15 +200,16 @@ public class CouchbaseQuery extends DB {
     return block.call();
   }
 
-  /**
-   * Perform key/value read ("get").
-   * @param table The name of the table.
-   * @param key The record key of the record to read.
-   * @param fields The list of fields to read, or null for all of them.
-   * @param result A Map of field/value pairs for the result.
-   */
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
+    if (!analyticsMode) {
+      return readQuery(key, fields);
+    } else {
+      return readAnalytics(key, fields);
+    }
+  }
+
+  public Status readQuery(String key, Set<String> fields) {
     String fieldSpec = fields != null ? String.join(",", fields) : "*";
     String statement = "SELECT " + fieldSpec + " FROM " + keyspace() + " WHERE id = \"" + key + "\"";
     try {
@@ -279,6 +232,27 @@ public class CouchbaseQuery extends DB {
     }
   }
 
+  public Status readAnalytics(String key, Set<String> fields) {
+    String fieldSpec = fields != null ? String.join(",", fields) : "*";
+    String statement = "SELECT " + fieldSpec + " FROM " + keyspace() + " WHERE id = \"" + key + "\"";
+    try {
+      return retryBlock(() -> {
+        AnalyticsResult response = cluster.analyticsQuery(statement, analyticsOptions()
+            .retryStrategy(FailFastRetryStrategy.INSTANCE));
+        JsonObject r = response.rowsAsObject().get(0);
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug(r.toString());
+        }
+        return response.metaData().status() == AnalyticsStatus.SUCCESS ? Status.OK : Status.ERROR;
+      });
+    } catch (DocumentNotFoundException e) {
+      return Status.NOT_FOUND;
+    } catch (Throwable t) {
+      LOGGER.error("read transaction exception: {}", t.getMessage(), t);
+      return Status.ERROR;
+    }
+  }
+
   /**
    * Update record.
    * @param table The name of the table.
@@ -291,6 +265,8 @@ public class CouchbaseQuery extends DB {
     String json;
 
     ObjectNode contents = toJson(values);
+    contents.put("id", key);
+    contents.put("record", recordNumber.incrementAndGet());
 
     try {
       json = mapper.writeValueAsString(contents);
@@ -359,20 +335,6 @@ public class CouchbaseQuery extends DB {
     }
   }
 
-  /**
-   * Helper method to turn the passed in iterator values into a map we can encode to json.
-   *
-   * @param values the values to encode.
-   * @return the map of encoded values.
-   */
-  private static Map<String, String> encode(final Map<String, ByteIterator> values) {
-    Map<String, String> result = new HashMap<>();
-    values.entrySet()
-        .parallelStream()
-        .forEach(entry -> result.put(entry.getKey(), entry.getValue().toString()));
-    return result;
-  }
-
   private static ObjectNode toJson(final Map<String, ByteIterator> values) {
     ObjectMapper mapper = new ObjectMapper();
     SimpleModule module = new SimpleModule("ByteIteratorSerializer");
@@ -381,8 +343,12 @@ public class CouchbaseQuery extends DB {
     return mapper.valueToTree(values);
   }
 
-  private static String keyspace() {
-    return bucketName + "." + scopeName + "." +collectionName;
+  private String keyspace() {
+    if (!analyticsMode) {
+      return bucketName + "." + scopeName + "." + collectionName;
+    } else {
+      return bucketName;
+    }
   }
 
   /**
@@ -392,46 +358,64 @@ public class CouchbaseQuery extends DB {
    */
   @Override
   public Status delete(final String table, final String key) {
+    String statement = "DELETE FROM " + keyspace() + " USE KEYS \"" + key + "\"";
     try {
       return retryBlock(() -> {
-        collection.remove(key);
-        return Status.OK;
+        QueryResult response = cluster.query(statement, queryOptions()
+            .maxParallelism(maxParallelism)
+            .retryStrategy(FailFastRetryStrategy.INSTANCE));
+        return response.metaData().status() == QueryStatus.SUCCESS ? Status.OK : Status.ERROR;
       });
+    } catch (DocumentNotFoundException e) {
+      return Status.OK;
     } catch (Throwable t) {
-      LOGGER.error("delete transaction exception: {}", t.getMessage(), t);
+      LOGGER.error("read transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
     }
   }
 
-  /**
-   * Query for specific rows of data using SQL++.
-   * @param table The name of the table.
-   * @param startkey The record key of the first record to read.
-   * @param recordcount The number of records to read.
-   * @param fields The list of fields to read, or null for all of them.
-   * @param result A Vector of HashMaps, where each HashMap is a set field/value pairs for one record.
-   */
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
+    if (!analyticsMode) {
+      return scanQuery(startkey, recordcount, fields);
+    } else {
+      return scanAnalytics(startkey, recordcount, fields);
+    }
+  }
+
+  public Status scanQuery(final String startkey, final int recordcount, final Set<String> fields) {
+    String fieldSpec = fields != null ? String.join(",", fields) : "*";
     Vector<Object> results = new Vector<>();
     try {
       return retryBlock(() -> {
-        final String query = "select raw id from " + keyspace() + " where id >= \"$1\" limit $2;";
-        cluster.reactive().query(query, queryOptions()
-                .pipelineBatch(128)
-                .pipelineCap(1024)
-                .scanCap(1024)
+        final String record = "select raw record from " + keyspace() + " where id = \"$1\"";
+        cluster.reactive().query(record, queryOptions()
                 .readonly(true)
-                .adhoc(adhoc)
                 .maxParallelism(maxParallelism)
                 .retryStrategy(FailFastRetryStrategy.INSTANCE)
-                .parameters(JsonArray.from(startkey, recordcount)))
+                .parameters(JsonArray.from(startkey)))
             .flatMapMany(res -> res.rowsAs(String.class).parallel())
             .parallel()
             .subscribe(
-                next -> results.add(collection.get(next, getOptions().transcoder(transcoder))
-                    .contentAs(contentType)),
+                next -> {
+                  String scan = "SELECT " + fieldSpec + " FROM " + keyspace() + " WHERE record > " + next + " limit $1";
+                  cluster.reactive().query(scan, queryOptions()
+                          .readonly(true)
+                          .maxParallelism(maxParallelism)
+                          .retryStrategy(FailFastRetryStrategy.INSTANCE)
+                          .parameters(JsonArray.from(recordcount)))
+                      .flatMapMany(res -> res.rowsAsObject().parallel())
+                      .parallel()
+                      .subscribe(
+                          results::add,
+                          error ->
+                          {
+                            LOGGER.debug(error.getMessage(), error);
+                            throw new RuntimeException(error);
+                          }
+                      );
+                },
                 error ->
                 {
                   LOGGER.debug(error.getMessage(), error);
@@ -439,12 +423,59 @@ public class CouchbaseQuery extends DB {
                 }
             );
         if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Scanned {} records", results.size());
+          LOGGER.debug("Query Scanned {} records", results.size());
         }
         return Status.OK;
       });
     } catch (Throwable t) {
-      LOGGER.error("scan transaction exception: {}", t.getMessage(), t);
+      LOGGER.error("query scan transaction exception: {}", t.getMessage(), t);
+      return Status.ERROR;
+    }
+  }
+
+  public Status scanAnalytics(final String startkey, final int recordcount, final Set<String> fields) {
+    String fieldSpec = fields != null ? String.join(",", fields) : "*";
+    Vector<Object> results = new Vector<>();
+    try {
+      return retryBlock(() -> {
+        final String record = "select raw record from " + keyspace() + " where id = \"$1\"";
+        cluster.reactive().analyticsQuery(record, analyticsOptions()
+                .readonly(true)
+                .retryStrategy(FailFastRetryStrategy.INSTANCE)
+                .parameters(JsonArray.from(startkey)))
+            .flatMapMany(res -> res.rowsAs(String.class).parallel())
+            .parallel()
+            .subscribe(
+                next -> {
+                  String scan = "SELECT " + fieldSpec + " FROM " + keyspace() + " WHERE record > " + next + " limit $1";
+                  cluster.reactive().analyticsQuery(scan, analyticsOptions()
+                          .readonly(true)
+                          .retryStrategy(FailFastRetryStrategy.INSTANCE)
+                          .parameters(JsonArray.from(recordcount)))
+                      .flatMapMany(res -> res.rowsAsObject().parallel())
+                      .parallel()
+                      .subscribe(
+                          results::add,
+                          error ->
+                          {
+                            LOGGER.debug(error.getMessage(), error);
+                            throw new RuntimeException(error);
+                          }
+                      );
+                },
+                error ->
+                {
+                  LOGGER.debug(error.getMessage(), error);
+                  throw new RuntimeException(error);
+                }
+            );
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Analytics Scanned {} records", results.size());
+        }
+        return Status.OK;
+      });
+    } catch (Throwable t) {
+      LOGGER.error("analytics scan transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
     }
   }
