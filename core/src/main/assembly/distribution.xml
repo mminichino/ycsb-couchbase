@@ -37,6 +37,7 @@
             <fileMode>0755</fileMode>
             <includes>
                 <include>run*</include>
+                <include>query*</include>
             </includes>
         </fileSet>
         <fileSet>
