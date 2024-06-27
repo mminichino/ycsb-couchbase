@@ -28,21 +28,15 @@ import com.couchbase.client.core.error.DocumentNotFoundException;
 import com.couchbase.client.core.retry.FailFastRetryStrategy;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.ClusterOptions;
-import com.couchbase.client.java.analytics.AnalyticsResult;
-import com.couchbase.client.java.analytics.AnalyticsStatus;
 import com.couchbase.client.java.codec.TypeRef;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.java.json.JsonArray;
-import com.couchbase.client.java.json.JsonObject;
 import com.couchbase.client.java.query.QueryResult;
 import com.couchbase.client.java.query.QueryStatus;
 import com.couchbase.client.java.query.ReactiveQueryResult;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.LoggerFactory;
-import reactor.util.retry.Retry;
 import site.ycsb.*;
 
 import java.io.IOException;
@@ -72,6 +66,7 @@ public class CouchbaseQuery extends DB {
   public static final String COUCHBASE_BUCKET = "couchbase.bucket";
   public static final String COUCHBASE_SCOPE = "couchbase.scope";
   public static final String COUCHBASE_COLLECTION = "couchbase.collection";
+  public static final String COUCHBASE_POOL_COUNT = "couchbase.pool";
   private static final AtomicInteger OPEN_CLIENTS = new AtomicInteger(0);
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Cluster cluster;
@@ -83,6 +78,7 @@ public class CouchbaseQuery extends DB {
   private int maxParallelism;
   private boolean analyticsMode;
   private static final AtomicLong recordNumber = new AtomicLong(0);
+  private static RoundRobinIterator<Cluster> clusterPool;
 
   @Override
   public void init() throws DBException {
@@ -109,7 +105,9 @@ public class CouchbaseQuery extends DB {
     scopeName = properties.getProperty(COUCHBASE_SCOPE, "_default");
     collectionName = properties.getProperty(COUCHBASE_COLLECTION, "_default");
     boolean sslMode = properties.getProperty(COUCHBASE_SSL_MODE, "false").equals("true");
-    boolean debug = getProperties().getProperty("couchbase.debug", "false").equals("true");
+    boolean debug = properties.getProperty("couchbase.debug", "false").equals("true");
+
+    int poolCount = Integer.parseInt(properties.getProperty(COUCHBASE_POOL_COUNT, "16"));
 
     if (debug) {
       LOGGER.setLevel(Level.DEBUG);
@@ -157,8 +155,14 @@ public class CouchbaseQuery extends DB {
               .ioConfig(ioConfiguration)
               .securityConfig(secConfiguration)
               .build();
-          cluster = Cluster.connect(connectString,
-              ClusterOptions.clusterOptions(username, password).environment(environment));
+
+          clusterPool = new RoundRobinIterator<>(Arrays.asList(new Cluster[poolCount]));
+
+          for (int i = 0; i < poolCount; i++) {
+            Cluster entry = Cluster.connect(connectString,
+                ClusterOptions.clusterOptions(username, password).environment(environment));
+            clusterPool.set(i, entry);
+          }
         }
       } catch(Exception e) {
         logError(e, connectString);
@@ -203,14 +207,6 @@ public class CouchbaseQuery extends DB {
     return block.call();
   }
 
-  private Map<String, ByteIterator> encode(Map<String, String> values) {
-    Map<String, ByteIterator> result = new HashMap<>();
-    values.entrySet()
-        .parallelStream()
-        .forEach(entry -> result.put(entry.getKey(), new StringByteIterator(entry.getValue())));
-    return result;
-  }
-
   private Map<String, Object> decode(Map<String, ByteIterator> values) {
     Map<String, Object> result = new HashMap<>();
     values.entrySet()
@@ -229,35 +225,27 @@ public class CouchbaseQuery extends DB {
   }
 
   public Status readQuery(final String key) {
-    TypeRef<Map<String, String>> typeRef = new TypeRef<>() {};
+    TypeRef<Map<String, Object>> typeRef = new TypeRef<>() {};
     String statement = "SELECT * FROM " + keyspace() + " WHERE id = ?";
     try {
-      cluster.reactive().query(statement, queryOptions()
-              .pipelineBatch(128)
-              .pipelineCap(1024)
-              .scanCap(1024)
-              .readonly(true)
-              .adhoc(adhoc)
-              .maxParallelism(maxParallelism)
-              .retryStrategy(FailFastRetryStrategy.INSTANCE)
-              .parameters(JsonArray.from(key)))
-          .flatMapMany(res -> res.rowsAs(typeRef).parallel())
-          .parallel()
-          .subscribe(
-              next -> {
-                Map<String, ByteIterator> result;
-                result = encode(next);
-                if (LOGGER.isDebugEnabled()) {
-                  LOGGER.debug(result.toString());
-                }
-              },
-              error ->
-              {
-                LOGGER.debug(error.getMessage(), error);
-                throw new RuntimeException(error);
-              }
-          );
-      return Status.OK;
+      return retryBlock(() -> {
+        Cluster entry = clusterPool.iterator().next();
+        List<Map<String, Object>> results = entry.reactive().query(statement, queryOptions()
+                .pipelineBatch(128)
+                .pipelineCap(1024)
+                .scanCap(1024)
+                .readonly(true)
+                .maxParallelism(maxParallelism)
+                .parameters(JsonArray.from(key))
+                .retryStrategy(FailFastRetryStrategy.INSTANCE))
+            .flatMapMany(result -> result.rowsAs(typeRef))
+            .collectList()
+            .block();
+        if (LOGGER.isDebugEnabled() && results != null) {
+          LOGGER.debug("Read Query Scanned {} records", results.size());
+        }
+        return Status.OK;
+      });
     } catch (DocumentNotFoundException e) {
       return Status.NOT_FOUND;
     } catch (Throwable t) {
@@ -267,30 +255,21 @@ public class CouchbaseQuery extends DB {
   }
 
   public Status readAnalytics(final String key) {
-    TypeRef<Map<String, String>> typeRef = new TypeRef<>() {};
+    TypeRef<Map<String, Object>> typeRef = new TypeRef<>() {};
     String statement = "SELECT * FROM " + keyspace() + " WHERE id = ?";
     try {
       return retryBlock(() -> {
-        cluster.reactive().analyticsQuery(statement, analyticsOptions()
+        Cluster entry = clusterPool.iterator().next();
+        List<Map<String, Object>> results = entry.reactive().analyticsQuery(statement, analyticsOptions()
                 .readonly(true)
-                .retryStrategy(FailFastRetryStrategy.INSTANCE)
-                .parameters(JsonArray.from(key)))
-            .flatMapMany(res -> res.rowsAs(typeRef).parallel())
-            .parallel()
-            .subscribe(
-                next -> {
-                  Map<String, ByteIterator> result;
-                  result = encode(next);
-                  if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug(result.toString());
-                  }
-                },
-                error ->
-                {
-                  LOGGER.debug(error.getMessage(), error);
-                  throw new RuntimeException(error);
-                }
-            );
+                .parameters(JsonArray.from(key))
+                .retryStrategy(FailFastRetryStrategy.INSTANCE))
+            .flatMapMany(result -> result.rowsAs(typeRef))
+            .collectList()
+            .block();
+        if (LOGGER.isDebugEnabled() && results != null) {
+          LOGGER.debug("Analytics Query Scanned {} records", results.size());
+        }
         return Status.OK;
       });
     } catch (DocumentNotFoundException e) {
@@ -309,35 +288,35 @@ public class CouchbaseQuery extends DB {
    */
   @Override
   public Status update(final String table, final String key, final Map<String, ByteIterator> values) {
-    ObjectMapper mapper = new ObjectMapper();
     String json;
 
-    ObjectNode contents = toJson(values);
-    contents.put("id", key);
-    contents.put("record", recordNumber.incrementAndGet());
-
     try {
-      json = mapper.writeValueAsString(contents);
+      Map<String, Object> data = decode(values);
+      data.put("id", key);
+      data.put("record", recordNumber.incrementAndGet());
+      ObjectMapper mapper = new ObjectMapper();
+      json = mapper.writeValueAsString(data);
     } catch (JsonProcessingException e) {
-      json = null;
-    }
-
-    if (json == null) {
       LOGGER.error("Update: Can not serialize values: {}", values);
       return Status.ERROR;
     }
 
-    String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (\"" + key + "\"," + json + ")";
+    String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (?, " + json + ")";
     try {
       return retryBlock(() -> {
-        QueryResult result = cluster.query(statement, queryOptions()
-            .adhoc(adhoc)
-            .maxParallelism(maxParallelism)
-            .retryStrategy(FailFastRetryStrategy.INSTANCE));
-        return result.metaData().status() == QueryStatus.SUCCESS ? Status.OK : Status.ERROR;
+        Cluster entry = clusterPool.iterator().next();
+        entry.reactive().query(statement, queryOptions()
+                .pipelineBatch(128)
+                .adhoc(adhoc)
+                .maxParallelism(maxParallelism)
+                .parameters(JsonArray.from(key))
+                .retryStrategy(FailFastRetryStrategy.INSTANCE))
+            .flatMapMany(ReactiveQueryResult::metaData)
+            .blockLast();
+        return Status.OK;
       });
     } catch (Throwable t) {
-      LOGGER.error("update transaction exception: {}", t.getMessage(), t);
+      LOGGER.error("insert transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
     }
   }
@@ -366,7 +345,8 @@ public class CouchbaseQuery extends DB {
     String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (?, " + json + ")";
     try {
       return retryBlock(() -> {
-        cluster.reactive().query(statement, queryOptions()
+        Cluster entry = clusterPool.iterator().next();
+        entry.reactive().query(statement, queryOptions()
                 .pipelineBatch(128)
                 .adhoc(adhoc)
                 .maxParallelism(maxParallelism)
@@ -380,14 +360,6 @@ public class CouchbaseQuery extends DB {
       LOGGER.error("insert transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
     }
-  }
-
-  private static ObjectNode toJson(final Map<String, ByteIterator> values) {
-    ObjectMapper mapper = new ObjectMapper();
-    SimpleModule module = new SimpleModule("ByteIteratorSerializer");
-    module.addSerializer(ByteIterator.class, new ByteIteratorSerializer());
-    mapper.registerModule(module);
-    return mapper.valueToTree(values);
   }
 
   private String keyspace() {
@@ -408,7 +380,8 @@ public class CouchbaseQuery extends DB {
     String statement = "DELETE FROM " + keyspace() + " USE KEYS \"" + key + "\"";
     try {
       return retryBlock(() -> {
-        QueryResult response = cluster.query(statement, queryOptions()
+        Cluster entry = clusterPool.iterator().next();
+        QueryResult response = entry.query(statement, queryOptions()
             .maxParallelism(maxParallelism)
             .retryStrategy(FailFastRetryStrategy.INSTANCE));
         return response.metaData().status() == QueryStatus.SUCCESS ? Status.OK : Status.ERROR;
@@ -425,18 +398,19 @@ public class CouchbaseQuery extends DB {
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
     if (!analyticsMode) {
-      return scanQuery(startkey, recordcount, fields);
+      return scanQuery(startkey, recordcount);
     } else {
-      return scanAnalytics(startkey, recordcount, fields);
+      return scanAnalytics(startkey, recordcount);
     }
   }
 
-  public Status scanQuery(final String startkey, final int recordcount, final Set<String> fields) {
-    TypeRef<Map<String, String>> typeRef = new TypeRef<>() {};
+  public Status scanQuery(final String startkey, final int recordcount) {
+    TypeRef<Map<String, Object>> typeRef = new TypeRef<>() {};
     final String statement = "SELECT * FROM " + keyspace() + " a WHERE a.record >= (SELECT RAW record FROM " + keyspace() + " b WHERE b.id = ?)[0] LIMIT ?";
     try {
       return retryBlock(() -> {
-        List<Map<String, String>> results = cluster.reactive().query(statement, queryOptions()
+        Cluster entry = clusterPool.iterator().next();
+        List<Map<String, Object>> results = entry.reactive().query(statement, queryOptions()
                 .pipelineBatch(128)
                 .pipelineCap(1024)
                 .scanCap(1024)
@@ -444,7 +418,7 @@ public class CouchbaseQuery extends DB {
                 .maxParallelism(maxParallelism)
                 .parameters(JsonArray.from(startkey, recordcount))
                 .retryStrategy(FailFastRetryStrategy.INSTANCE))
-            .flatMapMany(result -> result.rowsAs(typeRef))
+            .flatMapMany(result -> result.rowsAs(typeRef).parallel())
             .collectList()
             .block();
         if (LOGGER.isDebugEnabled() && results != null) {
@@ -458,16 +432,17 @@ public class CouchbaseQuery extends DB {
     }
   }
 
-  public Status scanAnalytics(final String startkey, final int recordcount, final Set<String> fields) {
-    TypeRef<Map<String, String>> typeRef = new TypeRef<>() {};
+  public Status scanAnalytics(final String startkey, final int recordcount) {
+    TypeRef<Map<String, Object>> typeRef = new TypeRef<>() {};
     final String statement = "SELECT * FROM " + keyspace() + " a WHERE a.record >= (SELECT RAW record FROM " + keyspace() + " b WHERE b.id = ?)[0] LIMIT ?";
     try {
       return retryBlock(() -> {
-        List<Map<String, String>> results = cluster.reactive().analyticsQuery(statement, analyticsOptions()
+        Cluster entry = clusterPool.iterator().next();
+        List<Map<String, Object>> results = entry.reactive().analyticsQuery(statement, analyticsOptions()
                 .readonly(true)
                 .parameters(JsonArray.from(startkey, recordcount))
                 .retryStrategy(FailFastRetryStrategy.INSTANCE))
-            .flatMapMany(result -> result.rowsAs(typeRef))
+            .flatMapMany(result -> result.rowsAs(typeRef).parallel())
             .collectList()
             .block();
         if (LOGGER.isDebugEnabled() && results != null) {
