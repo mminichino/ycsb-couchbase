@@ -363,14 +363,14 @@ public class CouchbaseQuery extends DB {
       return Status.ERROR;
     }
 
-    String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (?, ?)";
+    String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (?, " + json + ")";
     try {
       return retryBlock(() -> {
         cluster.reactive().query(statement, queryOptions()
                 .pipelineBatch(128)
                 .adhoc(adhoc)
                 .maxParallelism(maxParallelism)
-                .parameters(JsonArray.from(key, json))
+                .parameters(JsonArray.from(key))
                 .retryStrategy(FailFastRetryStrategy.INSTANCE))
             .flatMapMany(ReactiveQueryResult::metaData)
             .blockLast();
@@ -432,44 +432,22 @@ public class CouchbaseQuery extends DB {
   }
 
   public Status scanQuery(final String startkey, final int recordcount, final Set<String> fields) {
-    String fieldSpec = fields != null ? String.join(",", fields) : "*";
-    Vector<Object> results = new Vector<>();
+    TypeRef<Map<String, String>> typeRef = new TypeRef<>() {};
+    final String statement = "SELECT * FROM " + keyspace() + " a WHERE a.record >= (SELECT RAW record FROM " + keyspace() + " b WHERE b.id = ?)[0] LIMIT ?";
     try {
       return retryBlock(() -> {
-        final String record = "select raw record from " + keyspace() + " where id = \"$1\"";
-        cluster.reactive().query(record, queryOptions()
+        List<Map<String, String>> results = cluster.reactive().query(statement, queryOptions()
+                .pipelineBatch(128)
+                .pipelineCap(1024)
+                .scanCap(1024)
                 .readonly(true)
                 .maxParallelism(maxParallelism)
-                .retryStrategy(FailFastRetryStrategy.INSTANCE)
-                .parameters(JsonArray.from(startkey)))
-            .flatMapMany(res -> res.rowsAs(String.class).parallel())
-            .parallel()
-            .subscribe(
-                next -> {
-                  String scan = "SELECT " + fieldSpec + " FROM " + keyspace() + " WHERE record > " + next + " limit $1";
-                  cluster.reactive().query(scan, queryOptions()
-                          .readonly(true)
-                          .maxParallelism(maxParallelism)
-                          .retryStrategy(FailFastRetryStrategy.INSTANCE)
-                          .parameters(JsonArray.from(recordcount)))
-                      .flatMapMany(res -> res.rowsAsObject().parallel())
-                      .parallel()
-                      .subscribe(
-                          results::add,
-                          error ->
-                          {
-                            LOGGER.debug(error.getMessage(), error);
-                            throw new RuntimeException(error);
-                          }
-                      );
-                },
-                error ->
-                {
-                  LOGGER.debug(error.getMessage(), error);
-                  throw new RuntimeException(error);
-                }
-            );
-        if (LOGGER.isDebugEnabled()) {
+                .parameters(JsonArray.from(startkey, recordcount))
+                .retryStrategy(FailFastRetryStrategy.INSTANCE))
+            .flatMapMany(result -> result.rowsAs(typeRef))
+            .collectList()
+            .block();
+        if (LOGGER.isDebugEnabled() && results != null) {
           LOGGER.debug("Query Scanned {} records", results.size());
         }
         return Status.OK;
@@ -481,42 +459,18 @@ public class CouchbaseQuery extends DB {
   }
 
   public Status scanAnalytics(final String startkey, final int recordcount, final Set<String> fields) {
-    String fieldSpec = fields != null ? String.join(",", fields) : "*";
-    Vector<Object> results = new Vector<>();
+    TypeRef<Map<String, String>> typeRef = new TypeRef<>() {};
+    final String statement = "SELECT * FROM " + keyspace() + " a WHERE a.record >= (SELECT RAW record FROM " + keyspace() + " b WHERE b.id = ?)[0] LIMIT ?";
     try {
       return retryBlock(() -> {
-        final String record = "select raw record from " + keyspace() + " where id = \"$1\"";
-        cluster.reactive().analyticsQuery(record, analyticsOptions()
+        List<Map<String, String>> results = cluster.reactive().analyticsQuery(statement, analyticsOptions()
                 .readonly(true)
-                .retryStrategy(FailFastRetryStrategy.INSTANCE)
-                .parameters(JsonArray.from(startkey)))
-            .flatMapMany(res -> res.rowsAs(String.class).parallel())
-            .parallel()
-            .subscribe(
-                next -> {
-                  String scan = "SELECT " + fieldSpec + " FROM " + keyspace() + " WHERE record > " + next + " limit $1";
-                  cluster.reactive().analyticsQuery(scan, analyticsOptions()
-                          .readonly(true)
-                          .retryStrategy(FailFastRetryStrategy.INSTANCE)
-                          .parameters(JsonArray.from(recordcount)))
-                      .flatMapMany(res -> res.rowsAsObject().parallel())
-                      .parallel()
-                      .subscribe(
-                          results::add,
-                          error ->
-                          {
-                            LOGGER.debug(error.getMessage(), error);
-                            throw new RuntimeException(error);
-                          }
-                      );
-                },
-                error ->
-                {
-                  LOGGER.debug(error.getMessage(), error);
-                  throw new RuntimeException(error);
-                }
-            );
-        if (LOGGER.isDebugEnabled()) {
+                .parameters(JsonArray.from(startkey, recordcount))
+                .retryStrategy(FailFastRetryStrategy.INSTANCE))
+            .flatMapMany(result -> result.rowsAs(typeRef))
+            .collectList()
+            .block();
+        if (LOGGER.isDebugEnabled() && results != null) {
           LOGGER.debug("Analytics Scanned {} records", results.size());
         }
         return Status.OK;
