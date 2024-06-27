@@ -227,9 +227,9 @@ public class CouchbaseQuery extends DB {
     }
   }
 
-  public Status readQuery(String key) {
+  public Status readQuery(final String key) {
     TypeRef<Map<String, String>> typeRef = new TypeRef<>() {};
-    String statement = "SELECT * FROM " + keyspace() + " WHERE id = \"$1\"";
+    String statement = "SELECT * FROM " + keyspace() + " WHERE id = ?";
     try {
       cluster.reactive().query(statement, queryOptions()
               .pipelineBatch(128)
@@ -265,9 +265,9 @@ public class CouchbaseQuery extends DB {
     }
   }
 
-  public Status readAnalytics(String key) {
+  public Status readAnalytics(final String key) {
     TypeRef<Map<String, String>> typeRef = new TypeRef<>() {};
-    String statement = "SELECT * FROM " + keyspace() + " WHERE id = \"$1\"";
+    String statement = "SELECT * FROM " + keyspace() + " WHERE id = ?";
     try {
       return retryBlock(() -> {
         cluster.reactive().analyticsQuery(statement, analyticsOptions()
