@@ -42,6 +42,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.LoggerFactory;
+import reactor.util.retry.Retry;
 import site.ycsb.*;
 
 import java.io.IOException;
@@ -365,12 +366,14 @@ public class CouchbaseQuery extends DB {
     String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (?, ?)";
     try {
       return retryBlock(() -> {
-        cluster.query(statement, queryOptions()
-            .pipelineBatch(128)
-            .adhoc(adhoc)
-            .maxParallelism(maxParallelism)
-            .parameters(JsonArray.from(key, json))
-            .retryStrategy(FailFastRetryStrategy.INSTANCE));
+        cluster.reactive().query(statement, queryOptions()
+                .pipelineBatch(128)
+                .adhoc(adhoc)
+                .maxParallelism(maxParallelism)
+                .parameters(JsonArray.from(key, json))
+                .retryStrategy(FailFastRetryStrategy.INSTANCE))
+            .flatMapMany(ReactiveQueryResult::metaData)
+            .blockLast();
         return Status.OK;
       });
     } catch (Throwable t) {
