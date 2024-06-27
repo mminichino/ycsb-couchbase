@@ -362,13 +362,14 @@ public class CouchbaseQuery extends DB {
       return Status.ERROR;
     }
 
-    String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (\"" + key + "\", " + json + ")";
+    String statement = "UPSERT INTO " + keyspace() + " (KEY,VALUE) VALUES (?, ?)";
     try {
       return retryBlock(() -> {
         cluster.query(statement, queryOptions()
             .pipelineBatch(128)
             .adhoc(adhoc)
             .maxParallelism(maxParallelism)
+            .parameters(JsonArray.from(key, json))
             .retryStrategy(FailFastRetryStrategy.INSTANCE));
         return Status.OK;
       });
