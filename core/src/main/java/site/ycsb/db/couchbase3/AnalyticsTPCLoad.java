@@ -14,10 +14,13 @@ import com.couchbase.client.java.Bucket;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.ClusterOptions;
 import com.couchbase.client.java.Scope;
+import com.couchbase.client.java.Collection;
 import com.couchbase.client.java.codec.TypeRef;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.java.json.JsonArray;
 import com.couchbase.client.java.manager.collection.CollectionManager;
+import com.couchbase.client.java.manager.query.CollectionQueryIndexManager;
+import com.couchbase.client.java.manager.query.CreateQueryIndexOptions;
 import com.couchbase.client.java.query.QueryResult;
 import com.couchbase.client.java.query.QueryStatus;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -205,12 +208,12 @@ public class AnalyticsTPCLoad extends LoadDriver {
     queryIndexMgr.watchIndexes(Collections.singletonList(indexName), Duration.ofSeconds(10));
   }
 
-  public Status createCollection(String name) {
+  public Status createCollection(String name, List<String> indexFields) {
     try {
       LOGGER.debug("Creating collection: {}", name);
       collectionManager.createCollection(scopeName, name);
-      for (String key : keys) {
-        createFieldIndex(name, key);
+      for (String field : indexFields) {
+        createFieldIndex(name, field);
       }
       return Status.OK;
     } catch (CollectionExistsException e) {
