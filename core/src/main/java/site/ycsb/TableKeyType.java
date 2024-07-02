@@ -1,6 +1,6 @@
 package site.ycsb;
 
-public enum PrimaryKeyType {
+public enum TableKeyType {
   INTEGER,
   FLOAT,
   STRING
