@@ -105,6 +105,38 @@ public class Generate {
     return Batch.split(item, batchSize);
   }
 
+  public Stream<List<Warehouse>> warehouseData() {
+    return Batch.split(warehouse, batchSize);
+  }
+
+  public Stream<List<Stock>> stockData() {
+    return Batch.split(stock, batchSize);
+  }
+
+  public Stream<List<District>> districtData() {
+    return Batch.split(district, batchSize);
+  }
+
+  public Stream<List<Customer>> customerData() {
+    return Batch.split(customer, batchSize);
+  }
+
+  public Stream<List<History>> historyData() {
+    return Batch.split(history, batchSize);
+  }
+
+  public Stream<List<Order>> orderData() {
+    return Batch.split(orders, batchSize);
+  }
+
+  public Stream<List<NewOrder>> newOrderData() {
+    return Batch.split(newOrders, batchSize);
+  }
+
+  public Stream<List<OrderLine>> orderLineData() {
+    return Batch.split(orderLine, batchSize);
+  }
+
   public void generateItems() {
     int[] orig = new int[maxItems + 1];
     int pos;
