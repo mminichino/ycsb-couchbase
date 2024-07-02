@@ -8,6 +8,8 @@ import java.util.Properties;
 
 import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Logger;
+import site.ycsb.TableKeyType;
+import site.ycsb.TableKeys;
 
 public abstract class LoadDriver {
   static final Logger LOGGER =
@@ -20,6 +22,29 @@ public abstract class LoadDriver {
   public static final String TPCC_ORD_PER_DIST = "tpcc.ordPerDist";
   public static final String TPCC_MAX_NUM_ITEMS = "tpcc.maxNumItems";
   public static final String TPCC_MAX_ITEM_LEN = "tpcc.maxItemLen";
+
+  public static TableKeys itemTable = new TableKeys().create("i_id", TableKeyType.INTEGER);
+  public static TableKeys warehouseTable = new TableKeys().create("w_id", TableKeyType.INTEGER);
+  public static TableKeys stockTable = new TableKeys().create("s_i_id", TableKeyType.INTEGER)
+      .addForeignKey("s_w_id", TableKeyType.INTEGER);
+  public static TableKeys districtTable = new TableKeys().create("d_id", TableKeyType.INTEGER)
+      .addForeignKey("d_w_id", TableKeyType.INTEGER);
+  public static TableKeys customerTable = new TableKeys().create("c_id", TableKeyType.INTEGER)
+      .addForeignKey("c_d_id", TableKeyType.INTEGER)
+      .addForeignKey("c_w_id", TableKeyType.INTEGER);
+  public static TableKeys historyTable = new TableKeys().create("h_c_id", TableKeyType.INTEGER)
+      .addForeignKey("h_c_d_id", TableKeyType.INTEGER)
+      .addForeignKey("h_c_w_id", TableKeyType.INTEGER);
+  public static TableKeys orderTable = new TableKeys().create("o_id", TableKeyType.INTEGER)
+      .addForeignKey("o_d_id", TableKeyType.INTEGER)
+      .addForeignKey("o_w_id", TableKeyType.INTEGER);
+  public static TableKeys newOrderTable = new TableKeys().create("no_o_id", TableKeyType.INTEGER)
+      .addForeignKey("no_d_id", TableKeyType.INTEGER)
+      .addForeignKey("no_w_id", TableKeyType.INTEGER);
+  public static TableKeys orderLineTable = new TableKeys().create("ol_o_id", TableKeyType.INTEGER)
+      .addForeignKey("ol_d_id", TableKeyType.INTEGER)
+      .addForeignKey("ol_w_id", TableKeyType.INTEGER)
+      .addForeignKey("ol_number", TableKeyType.INTEGER);
 
   private static int transactionCount;
   private static int maxItems;
@@ -70,11 +95,29 @@ public abstract class LoadDriver {
     generator.createSchema();
   }
 
-  public abstract void insertBatch(List<?> batch);
+  public abstract Status createItemTable();
+  public abstract Status createWarehouseTable();
+  public abstract Status createStockTable();
+  public abstract Status createDistrictTable();
+  public abstract Status createCustomerTable();
+  public abstract Status createHistoryTable();
+  public abstract Status createOrderTable();
+  public abstract Status createNewOrderTable();
+  public abstract Status createOrderLineTable();
+
+  public abstract void insertItemBatch(List<Item> batch);
+  public abstract void insertWarehouseBatch(List<Warehouse> batch);
+  public abstract void insertStockBatch(List<Stock> batch);
+  public abstract void insertDistrictBatch(List<District> batch);
+  public abstract void insertCustomerBatch(List<Customer> batch);
+  public abstract void insertHistoryBatch(List<History> batch);
+  public abstract void insertOrderBatch(List<Order> batch);
+  public abstract void insertNewOrderBatch(List<NewOrder> batch);
+  public abstract void insertOrderLineBatch(List<OrderLine> batch);
 
   public Status insertItems() {
     try {
-      generator.itemData().forEach(this::insertBatch);
+      generator.itemData().forEach(this::insertItemBatch);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       return Status.ERROR;
@@ -84,7 +127,7 @@ public abstract class LoadDriver {
 
   public Status insertWarehouses() {
     try {
-      generator.warehouseData().forEach(this::insertBatch);
+      generator.warehouseData().forEach(this::insertWarehouseBatch);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       return Status.ERROR;
@@ -94,7 +137,7 @@ public abstract class LoadDriver {
 
   public Status insertStock() {
     try {
-      generator.stockData().forEach(this::insertBatch);
+      generator.stockData().forEach(this::insertStockBatch);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       return Status.ERROR;
@@ -104,7 +147,7 @@ public abstract class LoadDriver {
 
   public Status insertDistrict() {
     try {
-      generator.districtData().forEach(this::insertBatch);
+      generator.districtData().forEach(this::insertDistrictBatch);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       return Status.ERROR;
@@ -114,7 +157,7 @@ public abstract class LoadDriver {
 
   public Status insertCustomer() {
     try {
-      generator.customerData().forEach(this::insertBatch);
+      generator.customerData().forEach(this::insertCustomerBatch);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       return Status.ERROR;
@@ -124,7 +167,7 @@ public abstract class LoadDriver {
 
   public Status insertHistory() {
     try {
-      generator.historyData().forEach(this::insertBatch);
+      generator.historyData().forEach(this::insertHistoryBatch);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       return Status.ERROR;
@@ -134,7 +177,7 @@ public abstract class LoadDriver {
 
   public Status insertOrders() {
     try {
-      generator.orderData().forEach(this::insertBatch);
+      generator.orderData().forEach(this::insertOrderBatch);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       return Status.ERROR;
@@ -144,7 +187,7 @@ public abstract class LoadDriver {
 
   public Status insertNewOrders() {
     try {
-      generator.newOrderData().forEach(this::insertBatch);
+      generator.newOrderData().forEach(this::insertNewOrderBatch);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       return Status.ERROR;
@@ -154,7 +197,7 @@ public abstract class LoadDriver {
 
   public Status insertOrderLines() {
     try {
-      generator.orderLineData().forEach(this::insertBatch);
+      generator.orderLineData().forEach(this::insertOrderLineBatch);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       return Status.ERROR;
