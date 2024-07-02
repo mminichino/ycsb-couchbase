@@ -172,7 +172,7 @@ public class SQLStatusThread extends Thread {
       msg.append(d.format(curthroughput)).append(" current ops/sec; ");
     }
     if (todoops != 0) {
-      msg.append("est completion in ").append(SQLRemainingFormatter.format(estremaining));
+      msg.append("est completion in ").append(BenchRemainingFormatter.format(estremaining));
     }
 
     msg.append(Measurements.getMeasurements().getSummary());

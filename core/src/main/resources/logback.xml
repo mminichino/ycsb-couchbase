@@ -54,6 +54,10 @@
     <appender-ref ref="FILE"/>
   </logger>
 
+  <logger name="site.ycsb.db.couchbase3.AnalyticsTPCLoad" level="INFO" additivity="false">
+    <appender-ref ref="STDOUT"/>
+  </logger>
+
   <logger name="com.couchbase" level="ERROR" additivity="false">
     <appender-ref ref="FILE"/>
   </logger>

@@ -4,10 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TableKeys {
-  String primaryKeyName;
-  TableKeyType primaryKeyType;
-  List<String> foreignKeyNames = new ArrayList<>();
-  List<TableKeyType> foreignKeyTypes = new ArrayList<>();
+  public String primaryKeyName;
+  public TableKeyType primaryKeyType;
+  public List<String> foreignKeyNames = new ArrayList<>();
+  public List<TableKeyType> foreignKeyTypes = new ArrayList<>();
 
   public TableKeys create(String name, TableKeyType type) {
     this.primaryKeyName = name;

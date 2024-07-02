@@ -1,17 +1,14 @@
 package site.ycsb.tpc.tpcc;
 
-import site.ycsb.DBException;
-import site.ycsb.Status;
+import site.ycsb.*;
 
 import java.util.List;
 import java.util.Properties;
 
 import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Logger;
-import site.ycsb.TableKeyType;
-import site.ycsb.TableKeys;
 
-public abstract class LoadDriver {
+public abstract class LoadDriver extends BenchLoad {
   static final Logger LOGGER =
       (Logger)LoggerFactory.getLogger("site.ycsb.tpc.tpcc.LoadDriver");
 
@@ -59,6 +56,7 @@ public abstract class LoadDriver {
   private Properties properties = new Properties();
   private Generate generator;
 
+  @Override
   public void setProperties(Properties p) {
     properties = p;
 
@@ -74,12 +72,6 @@ public abstract class LoadDriver {
 
   public Properties getProperties() {
     return properties;
-  }
-
-  public void init() throws DBException {
-  }
-
-  public void cleanup() throws DBException {
   }
 
   public void generate() {
@@ -115,7 +107,33 @@ public abstract class LoadDriver {
   public abstract void insertNewOrderBatch(List<NewOrder> batch);
   public abstract void insertOrderLineBatch(List<OrderLine> batch);
 
+  @Override
+  public void load() {
+    createItemTable();
+    createWarehouseTable();
+    createStockTable();
+    createDistrictTable();
+    createCustomerTable();
+    createHistoryTable();
+    createOrderTable();
+    createNewOrderTable();
+    createOrderLineTable();
+
+    LOGGER.info("Beginning data generation phase");
+
+    insertItems();
+    insertWarehouses();
+    insertStock();
+    insertDistrict();
+    insertCustomer();
+    insertHistory();
+    insertOrders();
+    insertNewOrders();
+    insertOrderLines();
+  }
+
   public Status insertItems() {
+    LOGGER.info("Generating Item table data");
     try {
       generator.itemData().forEach(this::insertItemBatch);
     } catch (Exception e) {
@@ -126,6 +144,7 @@ public abstract class LoadDriver {
   }
 
   public Status insertWarehouses() {
+    LOGGER.info("Generating Warehouses table data");
     try {
       generator.warehouseData().forEach(this::insertWarehouseBatch);
     } catch (Exception e) {
@@ -136,6 +155,7 @@ public abstract class LoadDriver {
   }
 
   public Status insertStock() {
+    LOGGER.info("Generating Stock table data");
     try {
       generator.stockData().forEach(this::insertStockBatch);
     } catch (Exception e) {
@@ -146,6 +166,7 @@ public abstract class LoadDriver {
   }
 
   public Status insertDistrict() {
+    LOGGER.info("Generating District table data");
     try {
       generator.districtData().forEach(this::insertDistrictBatch);
     } catch (Exception e) {
@@ -156,6 +177,7 @@ public abstract class LoadDriver {
   }
 
   public Status insertCustomer() {
+    LOGGER.info("Generating Customer table data");
     try {
       generator.customerData().forEach(this::insertCustomerBatch);
     } catch (Exception e) {
@@ -166,6 +188,7 @@ public abstract class LoadDriver {
   }
 
   public Status insertHistory() {
+    LOGGER.info("Generating History table data");
     try {
       generator.historyData().forEach(this::insertHistoryBatch);
     } catch (Exception e) {
@@ -176,6 +199,7 @@ public abstract class LoadDriver {
   }
 
   public Status insertOrders() {
+    LOGGER.info("Generating Orders table data");
     try {
       generator.orderData().forEach(this::insertOrderBatch);
     } catch (Exception e) {
@@ -186,6 +210,7 @@ public abstract class LoadDriver {
   }
 
   public Status insertNewOrders() {
+    LOGGER.info("Generating NewOrders table data");
     try {
       generator.newOrderData().forEach(this::insertNewOrderBatch);
     } catch (Exception e) {
@@ -196,6 +221,7 @@ public abstract class LoadDriver {
   }
 
   public Status insertOrderLines() {
+    LOGGER.info("Generating OrderLines table data");
     try {
       generator.orderLineData().forEach(this::insertOrderLineBatch);
     } catch (Exception e) {

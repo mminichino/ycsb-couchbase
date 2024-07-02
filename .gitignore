@@ -5,6 +5,7 @@ statistics.dat
 statistics.log
 key_stats.dat
 test.properties
+test.tpcc.properties
 output.log
 output/
 

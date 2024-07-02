@@ -50,8 +50,8 @@ import ch.qos.logback.classic.Logger;
  * Turn seconds remaining into more useful units.
  * i.e. if there are hours or days worth of seconds, use them.
  */
-final class SQLRemainingFormatter {
-  private SQLRemainingFormatter() {
+final class BenchRemainingFormatter {
+  private BenchRemainingFormatter() {
     // not used
   }
 
@@ -86,13 +86,11 @@ final class SQLRemainingFormatter {
 /**
  * Main class for executing YCSB.
  */
-public final class SQLClient {
-  private SQLClient() {
-    //not used
-  }
+public final class BenchClient {
+  private BenchClient() {}
 
   static final Logger LOGGER =
-      (Logger)LoggerFactory.getLogger("site.ycsb.SQLClient");
+      (Logger)LoggerFactory.getLogger("site.ycsb.BenchClient");
 
   public static final String DEFAULT_RECORD_COUNT = "0";
 
@@ -114,7 +112,7 @@ public final class SQLClient {
   /**
    * The database class to be used.
    */
-  public static final String DB_PROPERTY = "db";
+  public static final String EXEC_CLASS_PROPERTY = "db";
 
   /**
    * The exporter class to be used. The default is
@@ -158,7 +156,7 @@ public final class SQLClient {
   /**
    * Whether or not this is the transaction phase (run) or not (load).
    */
-  public static final String DO_TRANSACTIONS_PROPERTY = "dotransactions";
+  public static final String LOAD_MODE_PROPERTY = "dotransactions";
 
   /**
    * Whether or not to show status during run.
@@ -204,6 +202,9 @@ public final class SQLClient {
    * Name of the workload property file.
    */
   public static final String WORKLOAD_NAME_PROPERTY = "workloadname";
+
+  public static final String BENCHMARK_LOAD_CLASS = "benchmark.load";
+  public static final String BENCHMARK_RUN_CLASS = "benchmark.run";
 
   /**
    * An optional thread used to track progress and measure JVM stats.
@@ -274,7 +275,7 @@ public final class SQLClient {
       throws IOException {
     MeasurementsExporter exporter = null;
     String workloadFileName = props.getProperty(WORKLOAD_NAME_PROPERTY, null);
-    boolean loadMode = props.getProperty(DO_TRANSACTIONS_PROPERTY, "true").equals("false");
+    boolean loadMode = props.getProperty(LOAD_MODE_PROPERTY, "true").equals("false");
 
     try {
       // if no destination file is provided the results will be written to stdout
@@ -344,7 +345,7 @@ public final class SQLClient {
 
   private static void copyLogFiles(Properties props) {
     String workloadFileName = props.getProperty(WORKLOAD_NAME_PROPERTY, null);
-    boolean loadMode = props.getProperty(DO_TRANSACTIONS_PROPERTY, "true").equals("false");
+    boolean loadMode = props.getProperty(LOAD_MODE_PROPERTY, "true").equals("false");
     String suffix = loadMode ? "-load-" : "-run-";
 
     if (workloadFileName != null) {
@@ -372,9 +373,8 @@ public final class SQLClient {
 
     long maxExecutionTime = Integer.parseInt(props.getProperty(MAX_EXECUTION_TIME, "0"));
 
-    //get number of threads, target and db
-    int threadcount = Integer.parseInt(props.getProperty(THREAD_COUNT_PROPERTY, "1"));
-    String dbname = props.getProperty(DB_PROPERTY, "site.ycsb.BasicDB");
+    int threadcount = Integer.parseInt(props.getProperty(THREAD_COUNT_PROPERTY, "32"));
+    String execClass = props.getProperty(EXEC_CLASS_PROPERTY, "site.ycsb.BasicDB");
     int target = Integer.parseInt(props.getProperty(TARGET_PROPERTY, "0"));
 
     statisticsClass = props.getProperty(STATISTICS_CLASS_PROPERTY, null);
@@ -382,7 +382,7 @@ public final class SQLClient {
 
     testSetup = props.getProperty(TEST_SETUP_PROPERTY, null);
     testCleanup = props.getProperty(TEST_CLEANUP_PROPERTY, null);
-    boolean loadMode = props.getProperty(DO_TRANSACTIONS_PROPERTY, "true").equals("false");
+    boolean loadMode = props.getProperty(LOAD_MODE_PROPERTY, "true").equals("false");
     manualMode = props.getProperty(MANUAL_MODE, "false").equals("true");
 
     int threadCountMax = Integer.parseInt(props.getProperty(THREAD_COUNT_MAX_PROPERTY, "2147483647"));
@@ -391,7 +391,6 @@ public final class SQLClient {
       threadcount = threadCountMax;
     }
 
-    //compute the target throughput
     double targetperthreadperms = -1;
     if (target > 0) {
       double targetperthread = ((double) target) / ((double) threadcount);
@@ -408,6 +407,14 @@ public final class SQLClient {
       }
     }
 
+    if (loadMode) {
+      BenchLoad loader = getBenchLoad(execClass);
+      loader.setProperties(props);
+      loader.init();
+      loader.load();
+      System.exit(0);
+    }
+
     Thread warningthread = setupWarningThread();
     warningthread.start();
 
@@ -417,7 +424,7 @@ public final class SQLClient {
 
     final Tracer tracer = getTracer(props, workload);
 
-    long records = initWorkload(dbname, props, warningthread, workload, tracer);
+    long records = initWorkload(execClass, props, warningthread, workload, tracer);
 
     props.setProperty(RECORD_COUNT_PROPERTY, String.valueOf(records));
     props.setProperty(INSERT_COUNT_PROPERTY, String.valueOf(records));
@@ -425,21 +432,8 @@ public final class SQLClient {
     System.err.printf("Starting test with %d threads\n", threadcount);
     final CountDownLatch completeLatch = new CountDownLatch(threadcount);
 
-    final List<SQLClientThread> clients = initDb(dbname, props, threadcount, targetperthreadperms,
+    final List<SQLClientThread> clients = initDb(execClass, props, threadcount, targetperthreadperms,
         workload, tracer, completeLatch);
-
-    if (status) {
-      boolean standardstatus = false;
-      if (props.getProperty(Measurements.MEASUREMENT_TYPE_PROPERTY, "").compareTo("timeseries") == 0) {
-        standardstatus = true;
-      }
-      int statusIntervalSeconds = Integer.parseInt(props.getProperty("status.interval", "10"));
-      boolean trackJVMStats = props.getProperty(Measurements.MEASUREMENT_TRACK_JVM_PROPERTY,
-          Measurements.MEASUREMENT_TRACK_JVM_PROPERTY_DEFAULT).equals("true");
-      statusthread = new SQLStatusThread(completeLatch, clients, label, standardstatus, statusIntervalSeconds,
-          trackJVMStats);
-      statusthread.start();
-    }
 
     if (enableStatistics && statisticsClass != null) {
       initStatisticsThread(statisticsClass, props);
@@ -507,7 +501,6 @@ public final class SQLClient {
         workload.cleanup();
       }
     } catch (WorkloadException e) {
-      e.printStackTrace();
       e.printStackTrace(System.out);
       System.exit(0);
     }
@@ -518,8 +511,8 @@ public final class SQLClient {
       }
     } catch (IOException e) {
       System.err.println("Could not export measurements, error: " + e.getMessage());
-      e.printStackTrace();
-      System.exit(-1);
+      e.printStackTrace(System.out);
+      System.exit(1);
     }
 
     if (testCleanup != null && !loadMode && !manualMode) {
@@ -535,7 +528,7 @@ public final class SQLClient {
       copyLogFiles(props);
     } catch (Exception e) {
       System.err.println("Could not copy log file: " + e.getMessage());
-      e.printStackTrace();
+      e.printStackTrace(System.err);
       System.exit(1);
     }
 
@@ -546,7 +539,7 @@ public final class SQLClient {
                                            double targetperthreadperms, SQLWorkload workload, Tracer tracer,
                                            CountDownLatch completeLatch) {
     boolean initFailed = false;
-    boolean dotransactions = Boolean.valueOf(props.getProperty(DO_TRANSACTIONS_PROPERTY, String.valueOf(true)));
+    boolean dotransactions = Boolean.valueOf(props.getProperty(LOAD_MODE_PROPERTY, String.valueOf(true)));
 
     final List<SQLClientThread> clients = new ArrayList<>(threadcount);
     try (final TraceScope span = tracer.newScope(CLIENT_INIT_SPAN)) {
@@ -610,7 +603,7 @@ public final class SQLClient {
   }
 
   private static long initWorkload(String dbname, Properties props, Thread warningthread, SQLWorkload workload, Tracer tracer) {
-    boolean runMode = Boolean.parseBoolean(props.getProperty(DO_TRANSACTIONS_PROPERTY, String.valueOf(true)));
+    boolean runMode = Boolean.parseBoolean(props.getProperty(LOAD_MODE_PROPERTY, String.valueOf(true)));
     System.err.println("Initializing workload");
     try {
       SQLDB db = SQLDBFactory.newDB(dbname, props, tracer, opsCounter);
@@ -716,6 +709,31 @@ public final class SQLClient {
     return null;
   }
 
+  private static BenchLoad getBenchLoad(String execClass) {
+    ClassLoader classLoader = Client.class.getClassLoader();
+
+    try {
+      Properties projectProp = new Properties();
+      projectProp.load(classLoader.getResourceAsStream("project.properties"));
+      System.err.println("YCSB Client " + projectProp.getProperty("version"));
+    } catch (IOException e) {
+      System.err.println("Unable to retrieve client version.");
+    }
+
+    System.err.println();
+    System.err.println("Loading benchmark loader...");
+    try {
+      Class<?> workloadclass = classLoader.loadClass(execClass);
+
+      return (BenchLoad) workloadclass.getDeclaredConstructor().newInstance();
+    } catch (Exception e) {
+      e.printStackTrace(System.err);
+      System.exit(0);
+    }
+
+    return null;
+  }
+
   private static String getWorkloadName(String path) {
     path = path.replaceAll("^[.][/\\\\]", "");
     String[] parts = path.split("[/\\\\]", 2);
@@ -767,10 +785,10 @@ public final class SQLClient {
         props.setProperty(TARGET_PROPERTY, String.valueOf(ttarget));
         argindex++;
       } else if (args[argindex].compareTo("-load") == 0) {
-        props.setProperty(DO_TRANSACTIONS_PROPERTY, String.valueOf(false));
+        props.setProperty(LOAD_MODE_PROPERTY, String.valueOf(false));
         argindex++;
       } else if (args[argindex].compareTo("-t") == 0) {
-        props.setProperty(DO_TRANSACTIONS_PROPERTY, String.valueOf(true));
+        props.setProperty(LOAD_MODE_PROPERTY, String.valueOf(true));
         argindex++;
       } else if (args[argindex].compareTo("-s") == 0) {
         props.setProperty(STATUS_PROPERTY, String.valueOf(true));
@@ -788,7 +806,7 @@ public final class SQLClient {
           System.out.println("Missing argument value for -db.");
           System.exit(0);
         }
-        props.setProperty(DB_PROPERTY, args[argindex]);
+        props.setProperty(EXEC_CLASS_PROPERTY, args[argindex]);
         argindex++;
       } else if (args[argindex].compareTo("-l") == 0) {
         argindex++;

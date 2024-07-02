@@ -73,7 +73,7 @@ public class AnalyticsTPCLoad extends LoadDriver {
   private static final AtomicLong recordNumber = new AtomicLong(0);
 
   @Override
-  public void init() throws DBException {
+  public void init() {
     ClassLoader classloader = Thread.currentThread().getContextClassLoader();
     URL propFile;
     Properties properties = new Properties();
@@ -84,7 +84,7 @@ public class AnalyticsTPCLoad extends LoadDriver {
       try {
         properties.load(propFile.openStream());
       } catch (IOException e) {
-        throw new DBException(e);
+        throw new RuntimeException(e);
       }
     }
 
@@ -227,47 +227,83 @@ public class AnalyticsTPCLoad extends LoadDriver {
 
   @Override
   public Status createItemTable() {
-    return null;
+    LOGGER.info("Creating item table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(itemTable.primaryKeyName);
+    indexFields.addAll(itemTable.foreignKeyNames);
+    return createCollection("item", indexFields);
   }
 
   @Override
   public Status createWarehouseTable() {
-    return null;
+    LOGGER.info("Creating warehouse table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(warehouseTable.primaryKeyName);
+    indexFields.addAll(warehouseTable.foreignKeyNames);
+    return createCollection("warehouse", indexFields);
   }
 
   @Override
   public Status createStockTable() {
-    return null;
+    LOGGER.info("Creating stock table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(stockTable.primaryKeyName);
+    indexFields.addAll(stockTable.foreignKeyNames);
+    return createCollection("stock", indexFields);
   }
 
   @Override
   public Status createDistrictTable() {
-    return null;
+    LOGGER.info("Creating district table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(districtTable.primaryKeyName);
+    indexFields.addAll(districtTable.foreignKeyNames);
+    return createCollection("district", indexFields);
   }
 
   @Override
   public Status createCustomerTable() {
-    return null;
+    LOGGER.info("Creating customer table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(customerTable.primaryKeyName);
+    indexFields.addAll(customerTable.foreignKeyNames);
+    return createCollection("customer", indexFields);
   }
 
   @Override
   public Status createHistoryTable() {
-    return null;
+    LOGGER.info("Creating history table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(historyTable.primaryKeyName);
+    indexFields.addAll(historyTable.foreignKeyNames);
+    return createCollection("history", indexFields);
   }
 
   @Override
   public Status createOrderTable() {
-    return null;
+    LOGGER.info("Creating order table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(orderTable.primaryKeyName);
+    indexFields.addAll(orderTable.foreignKeyNames);
+    return createCollection("orders", indexFields);
   }
 
   @Override
   public Status createNewOrderTable() {
-    return null;
+    LOGGER.info("Creating new order table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(newOrderTable.primaryKeyName);
+    indexFields.addAll(newOrderTable.foreignKeyNames);
+    return createCollection("new_orders", indexFields);
   }
 
   @Override
   public Status createOrderLineTable() {
-    return null;
+    LOGGER.info("Creating order line table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(orderLineTable.primaryKeyName);
+    indexFields.addAll(orderLineTable.foreignKeyNames);
+    return createCollection("order_line", indexFields);
   }
 
   @Override
