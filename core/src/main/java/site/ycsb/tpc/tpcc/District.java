@@ -7,9 +7,7 @@ import site.ycsb.tpc.TPCCUtil;
 public class District {
   private final ObjectNode data;
 
-  public District(int d_id, int d_w_id, int custPerDist, int ordPerDist) {
-    TPCCUtil util = new TPCCUtil(custPerDist, ordPerDist);
-
+  public District(int d_id, int d_w_id, TPCCUtil util) {
     float d_ytd = (float) 30000.0;
     int d_next_o_id = 3001;
 

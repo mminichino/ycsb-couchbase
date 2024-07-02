@@ -10,9 +10,7 @@ import java.util.Date;
 public class Customer {
   private final ObjectNode data;
 
-  public Customer(int c_id, int c_d_id, int c_w_id, int custPerDist, int ordPerDist) {
-    TPCCUtil util = new TPCCUtil(custPerDist, ordPerDist);
-
+  public Customer(int c_id, int c_d_id, int c_w_id, TPCCUtil util) {
     String c_first = util.makeAlphaString(8, 16);
     String c_middle = "O" + "E";
 

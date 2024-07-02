@@ -7,9 +7,7 @@ import site.ycsb.tpc.TPCCUtil;
 public class Item {
   private final ObjectNode data;
 
-  public Item(int i_id, int custPerDist, int ordPerDist, int[] orig) {
-    TPCCUtil util = new TPCCUtil(custPerDist, ordPerDist);
-
+  public Item(int i_id, TPCCUtil util, int[] orig) {
     int i_im_id = util.randomNumber(1, 10000);
     String i_name = util.makeAlphaString(14, 24);
     float i_price = (float) (util.randomNumber(100, 10000) / 100.0);

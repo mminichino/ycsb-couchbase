@@ -7,9 +7,7 @@ import site.ycsb.tpc.TPCCUtil;
 public class Warehouse {
   private final ObjectNode data;
 
-  public Warehouse(int w_id, int custPerDist, int ordPerDist) {
-    TPCCUtil util = new TPCCUtil(custPerDist, ordPerDist);
-
+  public Warehouse(int w_id, TPCCUtil util) {
     String w_name = util.makeAlphaString(6, 10);
     String w_street_1 = util.makeAlphaString(10, 20);
     String w_street_2 = util.makeAlphaString(10, 20);

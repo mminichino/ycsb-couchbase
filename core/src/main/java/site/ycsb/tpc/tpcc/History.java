@@ -10,9 +10,7 @@ import java.util.Date;
 public class History {
   private final ObjectNode data;
 
-  public History(int c_id, int c_d_id, int c_w_id, int custPerDist, int ordPerDist) {
-    TPCCUtil util = new TPCCUtil(custPerDist, ordPerDist);
-
+  public History(int c_id, int c_d_id, int c_w_id, TPCCUtil util) {
     String dateFormat = "yy-MM-dd'T'HH:mm:ss";
     SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
     String date = timeStampFormat.format(new Date());

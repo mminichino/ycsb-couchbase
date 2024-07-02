@@ -1,5 +1,6 @@
 package site.ycsb.tpc.tpcc;
 
+import site.ycsb.Batch;
 import site.ycsb.tpc.TPCCUtil;
 
 import org.slf4j.LoggerFactory;
@@ -7,6 +8,7 @@ import ch.qos.logback.classic.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 public class Generate {
   static final Logger LOGGER =
@@ -15,6 +17,7 @@ public class Generate {
   private final int custPerDist;
   private final int distPerWarehouse;
   private final int ordPerDist;
+  private final int warehouseCount;
   private final int batchSize;
   private final boolean enableDebug;
   private final TPCCUtil util;
@@ -34,6 +37,7 @@ public class Generate {
     private int custPerDist = 3000;
     private int distPerWarehouse = 10;
     private int ordPerDist = 3000;
+    private int warehouseCount = 1;
     private int batchSize = 1000;
     private boolean enableDebug = false;
 
@@ -57,6 +61,11 @@ public class Generate {
       return this;
     }
 
+    public GeneratorBuilder warehouseCount(int value) {
+      this.warehouseCount = value;
+      return this;
+    }
+
     public GeneratorBuilder batchSize(int value) {
       this.batchSize = value;
       return this;
@@ -77,10 +86,23 @@ public class Generate {
     this.custPerDist = builder.custPerDist;
     this.distPerWarehouse = builder.distPerWarehouse;
     this.ordPerDist = builder.ordPerDist;
+    this.warehouseCount = builder.warehouseCount;
     this.batchSize = builder.batchSize;
     this.enableDebug = builder.enableDebug;
     this.util = new TPCCUtil(custPerDist, ordPerDist);
     this.util.initPermutation();
+  }
+
+  public void createSchema() {
+    generateItems();
+    for (int warehouse = 0; warehouse < warehouseCount; warehouse++) {
+      generateWarehouse(warehouse);
+      generateDistrict(warehouse);
+    }
+  }
+
+  public Stream<List<Item>> itemData() {
+    return Batch.split(item, batchSize);
   }
 
   public void generateItems() {
@@ -101,7 +123,7 @@ public class Generate {
     }
 
     for (int i_id = 1; i_id <= maxItems; i_id++) {
-      item.add(new Item(i_id, custPerDist, ordPerDist, orig));
+      item.add(new Item(i_id, util, orig));
     }
 
     LOGGER.debug("item table data generation complete");
@@ -110,7 +132,7 @@ public class Generate {
   public void generateWarehouse(int warehouseNum) {
     LOGGER.debug("begin warehouse {} data generation", warehouseNum);
 
-    warehouse.add(new Warehouse(warehouseNum, custPerDist, ordPerDist));
+    warehouse.add(new Warehouse(warehouseNum, util));
     generateStock(warehouseNum);
     generateDistrict(warehouseNum);
 
@@ -136,7 +158,7 @@ public class Generate {
     }
 
     for (int s_i_id = 1; s_i_id <= maxItems; s_i_id++) {
-      stock.add(new Stock(s_i_id, warehouseNum, custPerDist, ordPerDist, orig));
+      stock.add(new Stock(s_i_id, warehouseNum, util, orig));
     }
 
     LOGGER.debug("stock table data generation complete for warehouse {}", warehouseNum);
@@ -146,7 +168,7 @@ public class Generate {
     LOGGER.debug("begin district data generation for warehouse {}", warehouseNum);
 
     for (int d_id = 1; d_id <= distPerWarehouse; d_id++) {
-      district.add(new District(d_id, warehouseNum, custPerDist, ordPerDist));
+      district.add(new District(d_id, warehouseNum, util));
       generateCustomers(warehouseNum, d_id);
       generateOrders(warehouseNum, d_id);
     }
@@ -158,8 +180,8 @@ public class Generate {
     LOGGER.debug("begin customer data generation for warehouse {}", warehouseNum);
 
     for (int c_id = 1; c_id <= custPerDist; c_id++) {
-      customer.add(new Customer(c_id, districtNum, warehouseNum, custPerDist, ordPerDist));
-      history.add(new History(c_id, districtNum, warehouseNum, custPerDist, ordPerDist));
+      customer.add(new Customer(c_id, districtNum, warehouseNum, util));
+      history.add(new History(c_id, districtNum, warehouseNum, util));
     }
 
     LOGGER.debug("customer table data generation complete for warehouse {}", warehouseNum);

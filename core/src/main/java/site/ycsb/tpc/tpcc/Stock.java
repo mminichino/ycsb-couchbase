@@ -7,9 +7,7 @@ import site.ycsb.tpc.TPCCUtil;
 public class Stock {
   private final ObjectNode data;
 
-  public Stock(int s_i_id, int s_w_id, int custPerDist, int ordPerDist, int[] orig) {
-    TPCCUtil util = new TPCCUtil(custPerDist, ordPerDist);
-
+  public Stock(int s_i_id, int s_w_id, TPCCUtil util, int[] orig) {
     int s_quantity = util.randomNumber(10, 100);
 
     String s_dist_01 = util.makeAlphaString(24, 24);
