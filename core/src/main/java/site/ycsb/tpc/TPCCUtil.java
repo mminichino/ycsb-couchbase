@@ -1,5 +1,7 @@
 package site.ycsb.tpc;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Random;
 
 public final class TPCCUtil {
@@ -15,6 +17,76 @@ public final class TPCCUtil {
   private int ordPerDist;
   private int permCount;
   private int[] nums;
+  private final NationData[] nations = {
+      new NationData(48, "ALGERIA", 0), new NationData(49, "ARGENTINA", 1), new NationData(50, "BRAZIL", 1),
+      new NationData(51, "CANADA", 1), new NationData(52, "EGYPT", 4), new NationData(53, "ETHIOPIA", 0),
+      new NationData(54, "FRANCE", 3), new NationData(55, "GERMANY", 3), new NationData(56, "INDIA", 2),
+      new NationData(57, "INDONESIA", 2), new NationData(65, "IRAN", 4), new NationData(66, "IRAQ", 4),
+      new NationData(67, "JAPAN", 2), new NationData(68, "JORDAN", 4), new NationData(69, "KENYA", 0),
+      new NationData(70, "MOROCCO", 0), new NationData(71, "MOZAMBIQUE", 0), new NationData(72, "PERU", 1),
+      new NationData(73, "CHINA", 2), new NationData(74, "ROMANIA", 3), new NationData(75, "SAUDI ARABIA", 4),
+      new NationData(76, "VIETNAM", 2), new NationData(77, "RUSSIA", 3), new NationData(78, "UNITED KINGDOM", 3),
+      new NationData(79, "UNITED STATES", 1), new NationData(80, "CHINA", 2), new NationData(81, "PAKISTAN", 2),
+      new NationData(82, "BANGLADESH", 2), new NationData(83, "MEXICO", 1), new NationData(84, "PHILIPPINES", 2),
+      new NationData(85, "THAILAND", 2), new NationData(86, "ITALY", 3), new NationData(87, "SOUTH AFRICA", 0),
+      new NationData(88, "SOUTH KOREA", 2), new NationData(89, "COLOMBIA", 1), new NationData(90, "SPAIN", 3),
+      new NationData(97, "UKRAINE", 3), new NationData(98, "POLAND", 3), new NationData(99, "SUDAN", 0),
+      new NationData(100, "UZBEKISTAN", 2), new NationData(101, "MALAYSIA", 2), new NationData(102, "VENEZUELA", 1),
+      new NationData(103, "NEPAL", 2), new NationData(104, "AFGHANISTAN", 2), new NationData(105, "NORTH KOREA", 2),
+      new NationData(106, "TAIWAN", 2), new NationData(107, "GHANA", 0), new NationData(108, "IVORY COAST", 0),
+      new NationData(109, "SYRIA", 4), new NationData(110, "MADAGASCAR", 0), new NationData(111, "CAMEROON", 0),
+      new NationData(112, "SRI LANKA", 2), new NationData(113, "ROMANIA", 3), new NationData(114, "NETHERLANDS", 3),
+      new NationData(115, "CAMBODIA", 2), new NationData(116, "BELGIUM", 3), new NationData(117, "GREECE", 3),
+      new NationData(118, "PORTUGAL", 3), new NationData(119, "ISRAEL", 4), new NationData(120, "FINLAND", 3),
+      new NationData(121, "SINGAPORE", 2), new NationData(122, "NORWAY", 3)
+  };
+  private final String[] regions = {"Africa", "America", "Asia", "Europe", "Middle East"};
+  private final String[] tpchNouns = {
+      "foxes", "ideas", "theodolites", "pinto beans", "instructions", "dependencies", "excuses",
+      "platelets", "asymptotes", "courts", "dolphins", "multipliers", "sauternes", "warthogs",
+      "frets", "dinos", "attainments", "somas", "Tiresias'", "patterns", "forges", "braids",
+      "hockey players", "frays", "warhorses", "dugouts", "notornis", "epitaphs", "pearls",
+      "tithes", "waters", "orbits", "gifts", "sheaves", "depths", "sentiments", "decoys",
+      "realms", "pains", "grouches", "escapades"
+  };
+
+  private final String[] tpchVerbs = {
+      "sleep", "wake", "are", "cajole", "haggle", "nag", "use", "boost", "affix", "detect",
+      "integrate", "maintain", "nod", "was", "lose", "sublate", "solve", "thrash", "promise",
+      "engage", "hinder", "print", "x-ray", "breach", "eat", "grow", "impress", "mold",
+      "poach", "serve", "run", "dazzle", "snooze", "doze", "unwind", "kindle", "play", "hang",
+      "believe", "doubt"
+  };
+
+  private final String[] tpchAdjectives = {
+      "furious", "sly", "careful", "blithe", "quick", "fluffy", "slow", "quiet", "ruthless",
+      "thin", "close", "dogged", "daring", "brave", "stealthy", "permanent", "enticing", "idle",
+      "busy", "regular", "final", "ironic", "even", "bold", "silent"
+  };
+
+  private final String[] tpchAdverbs = {
+      "sometimes", "always", "never", "furiously", "slyly", "carefully", "blithely", "quickly",
+      "fluffily", "slowly", "quietly", "ruthlessly", "thinly", "closely", "doggedly", "daringly",
+      "bravely", "stealthily", "permanently", "enticingly", "idly", "busily", "regularly",
+      "finally", "ironically", "evenly", "boldly", "silently"
+  };
+
+  private final String[] tpchPrepositions = {
+      "about", "above", "according to", "across", "after", "against", "along", "alongside of",
+      "among", "around", "at", "atop", "before", "behind", "beneath", "beside", "besides",
+      "between", "beyond", "by", "despite", "during", "except", "for", "from", "in place of",
+      "inside", "instead of", "into", "near", "of", "on", "outside", "over", "past", "since",
+      "through", "throughout", "to", "toward", "under", "until", "up", "upon", "without",
+      "with", "within"
+  };
+
+  private static final String[] tpchAuxiliaries = {
+      "do", "may", "might", "shall", "will", "would", "can", "could", "should", "ought to",
+      "must", "will have to", "shall have to", "could have to", "should have to", "must have to",
+      "need to", "try to"
+  };
+
+  private static final String[] tpchTerminators = {".", ";", ":", "?", "!", "--"};
 
   public TPCCUtil(int cust, int ord) {
     custPerDist = cust;
@@ -31,6 +103,22 @@ public final class TPCCUtil {
     String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     String lower = "abcdefghijklmnopqrstuvwxyz";
     String characters = upper + lower + numbers;
+    char[] alphanum = characters.toCharArray();
+    int length = randomNumber(minValue, maxValue);
+    int max = alphanum.length - 1;
+
+    StringBuilder string = new StringBuilder();
+    for (int i = 0; i < length; i++) {
+      string.append(alphanum[randomNumber(0, max)]);
+    }
+
+    return string.toString();
+  }
+
+  public String makeRandomString(int minValue, int maxValue) {
+    String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    String lower = "abcdefghijklmnopqrstuvwxyz";
+    String characters = upper + lower;
     char[] alphanum = characters.toCharArray();
     int length = randomNumber(minValue, maxValue);
     int max = alphanum.length - 1;
@@ -107,6 +195,152 @@ public final class TPCCUtil {
     }
     return nums[permCount++];
   }
+  
+  public NationData getNation(int id) {
+    return nations[id];
+  }
+  
+  public int numNations() {
+    return nations.length;
+  }
+
+  public String getRegion(int id) {
+    return regions[id];
+  }
+
+  public int numRegions() {
+    return regions.length;
+  }
+
+  public String strLeadingZero(int i, int zeros) {
+    return String.format("%0" + zeros + "d", i);
+  }
+
+  public double roundDouble(double value, int places) {
+    BigDecimal bd;
+    bd = BigDecimal.valueOf(value);
+    bd = bd.setScale(places, RoundingMode.HALF_UP);
+    return bd.doubleValue();
+  }
+
+  public double randomDouble(double minValue, double maxValue, int places) {
+    double randomValue = minValue + (maxValue - minValue) * rand.nextDouble();
+    return roundDouble(randomValue, places);
+  }
+
+  public String addDouble(double minValue, double maxValue, int places) {
+    return String.valueOf(randomDouble(minValue, maxValue, places));
+  }
+
+  public int randomArrayIndex(int length) {
+    int minValue = 0;
+    int maxValue = length - 1;
+    return rand.nextInt((maxValue - minValue) + 1) + minValue;
+  }
+
+  public String tpchNounPhrase() {
+    switch (randomNumber(0, 3)) {
+      case 0:
+        return tpchNoun();
+      case 1:
+        return tpchAdjective() + " " + tpchNoun();
+      case 2:
+        return tpchAdjective() + ", " + tpchAdjective() + " " + tpchNoun();
+      default:
+        return tpchAdverb() + " " + tpchAdjective() + " " + tpchNoun();
+    }
+  }
+
+  public String tpchVerbPhrase() {
+    switch (randomNumber(0, 3)) {
+      case 0:
+        return tpchVerb();
+      case 1:
+        return tpchAuxiliary() + " " + tpchVerb();
+      case 2:
+        return tpchVerb() + " " + tpchAdverb();
+      default:
+        return tpchAuxiliary() + " " + tpchVerb() + " " + tpchAdverb();
+    }
+  }
+
+  public String tpchPrepositionalPhrase() {
+    return tpchPrepositions[randomArrayIndex(tpchPrepositions.length)] + " the " + tpchNounPhrase();
+  }
+
+  public String tpchNoun() {
+    return tpchNouns[randomArrayIndex(tpchNouns.length)];
+  }
+
+  public String tpchVerb() {
+    return tpchVerbs[randomArrayIndex(tpchVerbs.length)];
+  }
+
+  public String tpchAdverb() {
+    return tpchAdverbs[randomArrayIndex(tpchAdverbs.length)];
+  }
+
+  public String tpchAdjective() {
+    return tpchAdjectives[randomArrayIndex(tpchAdjectives.length)];
+  }
+
+  public String tpchAuxiliary() {
+    return tpchAuxiliaries[randomArrayIndex(tpchAuxiliaries.length)];
+  }
+
+  public String tpchTerminator() {
+    return tpchTerminators[randomArrayIndex(tpchTerminators.length)];
+  }
+
+  public String tpchSentence() {
+    switch (randomNumber(0, 4)) {
+      case 0:
+        return tpchNounPhrase() + " " + tpchVerbPhrase() + " " + tpchTerminator();
+      case 1:
+        return tpchNounPhrase() + " " + tpchVerbPhrase() + " " + tpchPrepositionalPhrase() + " " + tpchTerminator();
+      case 2:
+        return tpchNounPhrase() + " " + tpchVerbPhrase() + " " + tpchNounPhrase() + " " + tpchTerminator();
+      case 3:
+        return tpchNounPhrase() + " " + tpchPrepositionalPhrase() + " " + tpchVerbPhrase() + " "
+            + tpchNounPhrase() + " " + tpchTerminator();
+      default:
+        return tpchNounPhrase() + " " + tpchPrepositionalPhrase() + " " + tpchVerbPhrase() + " " +
+            tpchPrepositionalPhrase() + " " + tpchTerminator();
+    }
+  }
+
+  public String tpchText(int length) {
+    StringBuilder s = new StringBuilder();
+    int i = 0;
+    while (s.length() < length) {
+      s.append(i++ == 0 ? "" : " ").append(tpchSentence());
+    }
+    return s.toString();
+  }
+
+  public String tpchTextString(int minLength, int maxLength) {
+    int length = randomNumber(minLength, maxLength);
+    return tpchText(length);
+  }
+
+  public String tpchTextStringCustomer(int minLength, int maxLength, String action) {
+    StringBuilder s = new StringBuilder();
+    int offset = 8 + action.length();
+    int window = maxLength - minLength - offset;
+    int l1 = randomNumber(0, window);
+    int l2 = randomNumber(0, window - l1);
+    int l3 = window - l2 - l1;
+    s.append(tpchText(l1));
+    s.append("Customer");
+    s.append(tpchText(l2));
+    s.append(action);
+    s.append(tpchText(l3));
+    return s.toString();
+  }
+
+//  public Set<List<Integer>> getRandomSets(List<Integer> list) {
+//    Collections.shuffle(list);
+//  }
 
   private TPCCUtil() {}
 }

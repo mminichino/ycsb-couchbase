@@ -361,7 +361,7 @@ public class AnalyticsTPCLoad extends LoadDriver {
 
   @Override
   public void insertItemBatch(List<Item> batch) {
-    LOGGER.info("Called with {} items", batch.size());
+    LOGGER.info("insertItemBatch: called with {} items", batch.size());
     List<String> result = new ArrayList<>();
     for (Item i : batch) {
       result.add(i.asJson());
@@ -372,41 +372,89 @@ public class AnalyticsTPCLoad extends LoadDriver {
 
   @Override
   public void insertWarehouseBatch(List<Warehouse> batch) {
-
+    LOGGER.info("insertWarehouseBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (Warehouse i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("warehouse", block);
   }
 
   @Override
   public void insertStockBatch(List<Stock> batch) {
-
+    LOGGER.info("insertStockBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (Stock i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("stock", block);
   }
 
   @Override
   public void insertDistrictBatch(List<District> batch) {
-
+    LOGGER.info("insertDistrictBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (District i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("district", block);
   }
 
   @Override
   public void insertCustomerBatch(List<Customer> batch) {
-
+    LOGGER.info("insertCustomerBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (Customer i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("customer", block);
   }
 
   @Override
   public void insertHistoryBatch(List<History> batch) {
-
+    LOGGER.info("insertHistoryBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (History i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("history", block);
   }
 
   @Override
   public void insertOrderBatch(List<Order> batch) {
-
+    LOGGER.info("insertOrderBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (Order i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("orders", block);
   }
 
   @Override
   public void insertNewOrderBatch(List<NewOrder> batch) {
-
+    LOGGER.info("insertNewOrderBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (NewOrder i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("new_orders", block);
   }
 
   @Override
   public void insertOrderLineBatch(List<OrderLine> batch) {
-
+    LOGGER.info("insertOrderLineBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (OrderLine i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("order_line", block);
   }
 }
