@@ -42,6 +42,9 @@ public abstract class LoadDriver extends BenchLoad {
       .addForeignKey("ol_d_id", TableKeyType.INTEGER)
       .addForeignKey("ol_w_id", TableKeyType.INTEGER)
       .addForeignKey("ol_number", TableKeyType.INTEGER);
+  public static TableKeys supplierTable = new TableKeys().create("su_suppkey", TableKeyType.INTEGER);
+  public static TableKeys nationTable = new TableKeys().create("n_nationkey", TableKeyType.INTEGER);
+  public static TableKeys regionTable = new TableKeys().create("r_regionkey", TableKeyType.INTEGER);
 
   private static int transactionCount;
   private static int maxItems;
@@ -96,6 +99,9 @@ public abstract class LoadDriver extends BenchLoad {
   public abstract Status createOrderTable();
   public abstract Status createNewOrderTable();
   public abstract Status createOrderLineTable();
+  public abstract Status createSupplierTable();
+  public abstract Status createNationTable();
+  public abstract Status createRegionTable();
 
   public abstract void insertItemBatch(List<Item> batch);
   public abstract void insertWarehouseBatch(List<Warehouse> batch);
@@ -106,6 +112,9 @@ public abstract class LoadDriver extends BenchLoad {
   public abstract void insertOrderBatch(List<Order> batch);
   public abstract void insertNewOrderBatch(List<NewOrder> batch);
   public abstract void insertOrderLineBatch(List<OrderLine> batch);
+  public abstract void insertSupplierBatch(List<Supplier> batch);
+  public abstract void insertNationBatch(List<Nation> batch);
+  public abstract void insertRegionBatch(List<Region> batch);
 
   @Override
   public void load() {
@@ -118,6 +127,9 @@ public abstract class LoadDriver extends BenchLoad {
     createOrderTable();
     createNewOrderTable();
     createOrderLineTable();
+    createSupplierTable();
+    createNationTable();
+    createRegionTable();
 
     LOGGER.info("Beginning data generation phase");
 
@@ -132,6 +144,9 @@ public abstract class LoadDriver extends BenchLoad {
     insertOrders();
     insertNewOrders();
     insertOrderLines();
+    insertSupplier();
+    insertNation();
+    insertRegion();
   }
 
   public Status insertItems() {
@@ -226,6 +241,39 @@ public abstract class LoadDriver extends BenchLoad {
     System.out.println("Generating OrderLines table data");
     try {
       generator.orderLineData().forEach(this::insertOrderLineBatch);
+    } catch (Exception e) {
+      LOGGER.error(e.getMessage(), e);
+      return Status.ERROR;
+    }
+    return Status.OK;
+  }
+
+  public Status insertSupplier() {
+    System.out.println("Generating Supplier table data");
+    try {
+      generator.supplierData().forEach(this::insertSupplierBatch);
+    } catch (Exception e) {
+      LOGGER.error(e.getMessage(), e);
+      return Status.ERROR;
+    }
+    return Status.OK;
+  }
+
+  public Status insertNation() {
+    System.out.println("Generating Nation table data");
+    try {
+      generator.nationData().forEach(this::insertNationBatch);
+    } catch (Exception e) {
+      LOGGER.error(e.getMessage(), e);
+      return Status.ERROR;
+    }
+    return Status.OK;
+  }
+
+  public Status insertRegion() {
+    System.out.println("Generating Region table data");
+    try {
+      generator.regionData().forEach(this::insertRegionBatch);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       return Status.ERROR;

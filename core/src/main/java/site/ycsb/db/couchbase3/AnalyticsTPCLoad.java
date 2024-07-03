@@ -330,6 +330,33 @@ public class AnalyticsTPCLoad extends LoadDriver {
     return createAnalyticsCollection("order_line", orderLineTable);
   }
 
+  @Override
+  public Status createSupplierTable() {
+    System.out.println("Creating supplier table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(supplierTable.primaryKeyName);
+    indexFields.addAll(supplierTable.foreignKeyNames);
+    return createAnalyticsCollection("supplier", supplierTable);
+  }
+
+  @Override
+  public Status createNationTable() {
+    System.out.println("Creating nation table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(nationTable.primaryKeyName);
+    indexFields.addAll(nationTable.foreignKeyNames);
+    return createAnalyticsCollection("nation", nationTable);
+  }
+
+  @Override
+  public Status createRegionTable() {
+    System.out.println("Creating region table");
+    List<String> indexFields = new ArrayList<>();
+    indexFields.add(regionTable.primaryKeyName);
+    indexFields.addAll(regionTable.foreignKeyNames);
+    return createAnalyticsCollection("region", regionTable);
+  }
+
   private String keyspace(String collection) {
     return bucketName + "." + scopeName + "." + collection;
   }
@@ -456,5 +483,38 @@ public class AnalyticsTPCLoad extends LoadDriver {
     }
     String block = String.join(",", result);
     insertRecords("order_line", block);
+  }
+
+  @Override
+  public void insertSupplierBatch(List<Supplier> batch) {
+    LOGGER.info("insertSupplierBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (Supplier i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("supplier", block);
+  }
+
+  @Override
+  public void insertNationBatch(List<Nation> batch) {
+    LOGGER.info("insertNationBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (Nation i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("nation", block);
+  }
+
+  @Override
+  public void insertRegionBatch(List<Region> batch) {
+    LOGGER.info("insertRegionBatch: called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (Region i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("region", block);
   }
 }

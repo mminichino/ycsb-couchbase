@@ -7,7 +7,9 @@ import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Logger;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 
 public class Generate {
@@ -18,6 +20,7 @@ public class Generate {
   private final int distPerWarehouse;
   private final int ordPerDist;
   private final int warehouseCount;
+  private final int supplierCount;
   private final int batchSize;
   private final boolean enableDebug;
   private final TPCCUtil util;
@@ -31,6 +34,9 @@ public class Generate {
   public List<Order> orders = new ArrayList<>();
   public List<NewOrder> newOrders = new ArrayList<>();
   public List<OrderLine> orderLine = new ArrayList<>();
+  public List<Supplier> supplier = new ArrayList<>();
+  public List<Nation> nation = new ArrayList<>();
+  public List<Region> region = new ArrayList<>();
 
   public static class GeneratorBuilder {
     private int maxItems = 100000;
@@ -38,6 +44,7 @@ public class Generate {
     private int distPerWarehouse = 10;
     private int ordPerDist = 3000;
     private int warehouseCount = 1;
+    private int supplierCount = 10000;
     private int batchSize = 1000;
     private boolean enableDebug = false;
 
@@ -66,6 +73,11 @@ public class Generate {
       return this;
     }
 
+    public GeneratorBuilder supplierCount(int value) {
+      this.supplierCount = value;
+      return this;
+    }
+
     public GeneratorBuilder batchSize(int value) {
       this.batchSize = value;
       return this;
@@ -87,6 +99,7 @@ public class Generate {
     this.distPerWarehouse = builder.distPerWarehouse;
     this.ordPerDist = builder.ordPerDist;
     this.warehouseCount = builder.warehouseCount;
+    this.supplierCount = builder.supplierCount;
     this.batchSize = builder.batchSize;
     this.enableDebug = builder.enableDebug;
     this.util = new TPCCUtil(custPerDist, ordPerDist);
@@ -98,6 +111,9 @@ public class Generate {
       generateWarehouse(warehouse);
       generateDistrict(warehouse);
     }
+    generateSuppliers();
+    generateNation();
+    generateRegion();
   }
 
   public Stream<List<Item>> itemData() {
@@ -134,6 +150,18 @@ public class Generate {
 
   public Stream<List<OrderLine>> orderLineData() {
     return Batch.split(orderLine, batchSize);
+  }
+
+  public Stream<List<Supplier>> supplierData() {
+    return Batch.split(supplier, batchSize);
+  }
+
+  public Stream<List<Nation>> nationData() {
+    return Batch.split(nation, batchSize);
+  }
+
+  public Stream<List<Region>> regionData() {
+    return Batch.split(region, batchSize);
   }
 
   public void generateItems() {
@@ -234,5 +262,32 @@ public class Generate {
     }
 
     LOGGER.debug("order table data generation complete for warehouse {}", warehouseNum);
+  }
+
+  public void generateSuppliers() {
+    LOGGER.debug("begin supplier data generation");
+    List<List<Integer>> subsets = util.getRandomSets(supplierCount, 5);
+    List<Integer> comments = subsets.get(0);
+    List<Integer> complaints = subsets.get(1);
+
+    for (int su_suppkey = 1; su_suppkey <= supplierCount; su_suppkey++) {
+      supplier.add(new Supplier(su_suppkey, comments, complaints, util));
+    }
+  }
+
+  public void generateNation() {
+    LOGGER.debug("begin nation data generation");
+
+    for (int nationkey = 1; nationkey <= util.numNations(); nationkey++) {
+      nation.add(new Nation(nationkey, util));
+    }
+  }
+
+  public void generateRegion() {
+    LOGGER.debug("begin region data generation");
+
+    for (int r_regionkey = 1; r_regionkey <= util.numRegions(); r_regionkey++) {
+      region.add(new Region(r_regionkey, util));
+    }
   }
 }

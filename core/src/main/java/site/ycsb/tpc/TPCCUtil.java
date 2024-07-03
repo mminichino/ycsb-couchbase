@@ -2,7 +2,9 @@ package site.ycsb.tpc;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Random;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public final class TPCCUtil {
   private final Random rand = new Random();
@@ -197,7 +199,7 @@ public final class TPCCUtil {
   }
   
   public NationData getNation(int id) {
-    return nations[id];
+    return nations[id-1];
   }
   
   public int numNations() {
@@ -205,7 +207,7 @@ public final class TPCCUtil {
   }
 
   public String getRegion(int id) {
-    return regions[id];
+    return regions[id-1];
   }
 
   public int numRegions() {
@@ -338,9 +340,17 @@ public final class TPCCUtil {
     return s.toString();
   }
 
-//  public Set<List<Integer>> getRandomSets(List<Integer> list) {
-//    Collections.shuffle(list);
-//  }
+  public List<List<Integer>> getRandomSets(int values, int length) {
+    List<Integer> list = IntStream.range(1, values + 1).boxed().collect(Collectors.toList());
+    Collections.shuffle(list);
+    int fullChunks = (list.size() - 1) / length;
+    List<List<Integer>> chunks = IntStream.range(0, fullChunks + 1).mapToObj(
+        n -> list.subList(n * length, n == fullChunks ? list.size() : (n + 1) * length)).collect(Collectors.toList());
+    List<List<Integer>> result = new ArrayList<>();
+    result.add(chunks.get(0));
+    result.add(chunks.get(1));
+    return result;
+  }
 
   private TPCCUtil() {}
 }
