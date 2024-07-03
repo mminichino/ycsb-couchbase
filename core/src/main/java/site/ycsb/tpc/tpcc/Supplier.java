@@ -12,7 +12,7 @@ public class Supplier {
   public Supplier(int su_suppkey, List<Integer> comments, List<Integer> complaints, TPCCUtil util) {
     String su_name = "Supplier#" + util.strLeadingZero(su_suppkey, 9);
     String su_address = util.makeRandomString(10, 40);
-    int su_nationkey = util.getNation(util.randomNumber(0, util.numNations() - 1)).id;
+    int su_nationkey = util.getNation(util.randomNumber(1, util.numNations())).id;
     String su_phone = util.makeNumberString(16, 16);
     double su_acctbal = util.randomDouble(-999.99, 9999.99,2);
     String su_comment;
