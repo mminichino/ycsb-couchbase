@@ -188,10 +188,6 @@ public final class TPCCUtil {
     return rand.nextInt((maxValue - minValue) + 1) + minValue;
   }
 
-  public long randomLongNumber(long minValue, long maxValue) {
-    return rand.nextLong((maxValue - minValue) + 1) + minValue;
-  }
-
   public String makeAlphaString(int minValue, int maxValue) {
     String numbers = "0123456789";
     String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
