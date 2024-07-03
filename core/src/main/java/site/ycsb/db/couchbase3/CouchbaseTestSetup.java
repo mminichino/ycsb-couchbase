@@ -8,6 +8,7 @@ import java.util.Properties;
  * Prepare Cluster for Testing.
  */
 public class CouchbaseTestSetup extends TestSetup {
+  public static final String ENABLE_SETUP = "setup.enable";
   public static final String CLUSTER_HOST = "couchbase.hostname";
   public static final String CLUSTER_USER = "couchbase.username";
   public static final String CLUSTER_PASSWORD = "couchbase.password";
@@ -37,6 +38,8 @@ public class CouchbaseTestSetup extends TestSetup {
 
   @Override
   public void testSetup(Properties properties) {
+    boolean runSetup = Boolean.parseBoolean(properties.getProperty(ENABLE_SETUP, String.valueOf(true)));
+
     String clusterHost = properties.getProperty(CLUSTER_HOST, CouchbaseConnect.DEFAULT_HOSTNAME);
     String clusterUser = properties.getProperty(CLUSTER_USER, CouchbaseConnect.DEFAULT_USER);
     String clusterPassword = properties.getProperty(CLUSTER_PASSWORD, CouchbaseConnect.DEFAULT_PASSWORD);
@@ -65,6 +68,11 @@ public class CouchbaseTestSetup extends TestSetup {
 
     boolean indexCreate = properties.getProperty(INDEX_CREATE, "false").equals("true");
     String indexField = properties.getProperty(INDEX_FIELD, "meta().id");
+
+    if (!runSetup) {
+      System.out.println("Skipping setup automation");
+      return;
+    }
 
     System.err.println("Starting test setup");
 

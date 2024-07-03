@@ -133,7 +133,7 @@ public abstract class LoadDriver extends BenchLoad {
   }
 
   public Status insertItems() {
-    LOGGER.info("Generating Item table data");
+    System.out.println("Generating Item table data");
     try {
       generator.itemData().forEach(this::insertItemBatch);
     } catch (Exception e) {
@@ -144,7 +144,7 @@ public abstract class LoadDriver extends BenchLoad {
   }
 
   public Status insertWarehouses() {
-    LOGGER.info("Generating Warehouses table data");
+    System.out.println("Generating Warehouses table data");
     try {
       generator.warehouseData().forEach(this::insertWarehouseBatch);
     } catch (Exception e) {
@@ -155,7 +155,7 @@ public abstract class LoadDriver extends BenchLoad {
   }
 
   public Status insertStock() {
-    LOGGER.info("Generating Stock table data");
+    System.out.println("Generating Stock table data");
     try {
       generator.stockData().forEach(this::insertStockBatch);
     } catch (Exception e) {
@@ -166,7 +166,7 @@ public abstract class LoadDriver extends BenchLoad {
   }
 
   public Status insertDistrict() {
-    LOGGER.info("Generating District table data");
+    System.out.println("Generating District table data");
     try {
       generator.districtData().forEach(this::insertDistrictBatch);
     } catch (Exception e) {
@@ -177,7 +177,7 @@ public abstract class LoadDriver extends BenchLoad {
   }
 
   public Status insertCustomer() {
-    LOGGER.info("Generating Customer table data");
+    System.out.println("Generating Customer table data");
     try {
       generator.customerData().forEach(this::insertCustomerBatch);
     } catch (Exception e) {
@@ -188,7 +188,7 @@ public abstract class LoadDriver extends BenchLoad {
   }
 
   public Status insertHistory() {
-    LOGGER.info("Generating History table data");
+    System.out.println("Generating History table data");
     try {
       generator.historyData().forEach(this::insertHistoryBatch);
     } catch (Exception e) {
@@ -199,7 +199,7 @@ public abstract class LoadDriver extends BenchLoad {
   }
 
   public Status insertOrders() {
-    LOGGER.info("Generating Orders table data");
+    System.out.println("Generating Orders table data");
     try {
       generator.orderData().forEach(this::insertOrderBatch);
     } catch (Exception e) {
@@ -210,7 +210,7 @@ public abstract class LoadDriver extends BenchLoad {
   }
 
   public Status insertNewOrders() {
-    LOGGER.info("Generating NewOrders table data");
+    System.out.println("Generating NewOrders table data");
     try {
       generator.newOrderData().forEach(this::insertNewOrderBatch);
     } catch (Exception e) {
@@ -221,7 +221,7 @@ public abstract class LoadDriver extends BenchLoad {
   }
 
   public Status insertOrderLines() {
-    LOGGER.info("Generating OrderLines table data");
+    System.out.println("Generating OrderLines table data");
     try {
       generator.orderLineData().forEach(this::insertOrderLineBatch);
     } catch (Exception e) {

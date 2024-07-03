@@ -225,85 +225,142 @@ public class AnalyticsTPCLoad extends LoadDriver {
     }
   }
 
+  public Status createAnalyticsCollection(String name, TableKeys keys) {
+    String statement;
+    String keyType;
+
+    switch(keys.primaryKeyType) {
+      case INTEGER:
+        keyType = "int";
+        break;
+      case FLOAT:
+        keyType = "double";
+        break;
+      default:
+        keyType = "string";
+    }
+
+    statement = "CREATE DATABASE " + bucketName + " IF NOT EXISTS";
+    runQuery(statement);
+    statement = "CREATE SCOPE " + bucketName + "." + scopeName + " IF NOT EXISTS";
+    runQuery(statement);
+    statement = "CREATE COLLECTION " + bucketName + "." + scopeName + "." + name + " IF NOT EXISTS PRIMARY KEY (" + keys.primaryKeyName + ":" + keyType + ")";
+    runQuery(statement);
+    return Status.OK;
+  }
+
   @Override
   public Status createItemTable() {
-    LOGGER.info("Creating item table");
+    System.out.println("Creating item table");
     List<String> indexFields = new ArrayList<>();
     indexFields.add(itemTable.primaryKeyName);
     indexFields.addAll(itemTable.foreignKeyNames);
-    return createCollection("item", indexFields);
+    return createAnalyticsCollection("item", itemTable);
   }
 
   @Override
   public Status createWarehouseTable() {
-    LOGGER.info("Creating warehouse table");
+    System.out.println("Creating warehouse table");
     List<String> indexFields = new ArrayList<>();
     indexFields.add(warehouseTable.primaryKeyName);
     indexFields.addAll(warehouseTable.foreignKeyNames);
-    return createCollection("warehouse", indexFields);
+    return createAnalyticsCollection("warehouse", warehouseTable);
   }
 
   @Override
   public Status createStockTable() {
-    LOGGER.info("Creating stock table");
+    System.out.println("Creating stock table");
     List<String> indexFields = new ArrayList<>();
     indexFields.add(stockTable.primaryKeyName);
     indexFields.addAll(stockTable.foreignKeyNames);
-    return createCollection("stock", indexFields);
+    return createAnalyticsCollection("stock", stockTable);
   }
 
   @Override
   public Status createDistrictTable() {
-    LOGGER.info("Creating district table");
+    System.out.println("Creating district table");
     List<String> indexFields = new ArrayList<>();
     indexFields.add(districtTable.primaryKeyName);
     indexFields.addAll(districtTable.foreignKeyNames);
-    return createCollection("district", indexFields);
+    return createAnalyticsCollection("district", districtTable);
   }
 
   @Override
   public Status createCustomerTable() {
-    LOGGER.info("Creating customer table");
+    System.out.println("Creating customer table");
     List<String> indexFields = new ArrayList<>();
     indexFields.add(customerTable.primaryKeyName);
     indexFields.addAll(customerTable.foreignKeyNames);
-    return createCollection("customer", indexFields);
+    return createAnalyticsCollection("customer", customerTable);
   }
 
   @Override
   public Status createHistoryTable() {
-    LOGGER.info("Creating history table");
+    System.out.println("Creating history table");
     List<String> indexFields = new ArrayList<>();
     indexFields.add(historyTable.primaryKeyName);
     indexFields.addAll(historyTable.foreignKeyNames);
-    return createCollection("history", indexFields);
+    return createAnalyticsCollection("history", historyTable);
   }
 
   @Override
   public Status createOrderTable() {
-    LOGGER.info("Creating order table");
+    System.out.println("Creating order table");
     List<String> indexFields = new ArrayList<>();
     indexFields.add(orderTable.primaryKeyName);
     indexFields.addAll(orderTable.foreignKeyNames);
-    return createCollection("orders", indexFields);
+    return createAnalyticsCollection("orders", orderTable);
   }
 
   @Override
   public Status createNewOrderTable() {
-    LOGGER.info("Creating new order table");
+    System.out.println("Creating new order table");
     List<String> indexFields = new ArrayList<>();
     indexFields.add(newOrderTable.primaryKeyName);
     indexFields.addAll(newOrderTable.foreignKeyNames);
-    return createCollection("new_orders", indexFields);
+    return createAnalyticsCollection("new_orders", newOrderTable);
   }
 
   @Override
   public Status createOrderLineTable() {
-    LOGGER.info("Creating order line table");
+    System.out.println("Creating order line table");
     List<String> indexFields = new ArrayList<>();
     indexFields.add(orderLineTable.primaryKeyName);
     indexFields.addAll(orderLineTable.foreignKeyNames);
-    return createCollection("order_line", indexFields);
+    return createAnalyticsCollection("order_line", orderLineTable);
+  }
+
+  private String keyspace() {
+    if (!analyticsMode) {
+      return bucketName + "." + scopeName + "." + collectionName;
+    } else {
+      return bucketName;
+    }
+  }
+
+  public Status runQuery(String statement) {
+    try {
+      return retryBlock(() -> {
+        cluster.analyticsQuery(statement, analyticsOptions());
+        return Status.OK;
+      });
+    } catch (Throwable t) {
+      LOGGER.error("query exception: {}", t.getMessage(), t);
+      return Status.ERROR;
+    }
+  }
+
+  public Status insertRecords(String json) {
+    String statement = "UPSERT INTO " + keyspace() + " (" + json + ")";
+    try {
+      return retryBlock(() -> {
+        cluster.analyticsQuery(statement, analyticsOptions());
+        return Status.OK;
+      });
+    } catch (Throwable t) {
+      LOGGER.error("insert transaction exception: {}", t.getMessage(), t);
+      return Status.ERROR;
+    }
   }
 
   @Override
