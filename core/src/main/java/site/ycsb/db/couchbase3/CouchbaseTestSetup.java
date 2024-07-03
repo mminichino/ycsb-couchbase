@@ -112,6 +112,8 @@ public class CouchbaseTestSetup extends TestSetup {
       }
       System.err.printf("Creating bucket %s (%s) on cluster:[%s]\n", bucket, typeText, host);
       db.createBucket(bucket, replicas, type);
+      System.err.printf("Creating scope %s\n", scope);
+      db.createScope(bucket, scope);
       System.err.printf("Creating collection %s\n", collection);
       db.createCollection(bucket, scope, collection);
       if (db.isAnalyticsEnabled()) {

@@ -31,6 +31,10 @@ public class Region {
     return data.get("r_comment").asInt();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }

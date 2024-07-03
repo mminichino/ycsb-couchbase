@@ -26,6 +26,10 @@ public class NewOrder {
     return data.get("no_w_id").asInt();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }

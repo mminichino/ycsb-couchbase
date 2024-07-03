@@ -79,6 +79,10 @@ public class District {
     return data.get("d_next_o_id").asInt();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }

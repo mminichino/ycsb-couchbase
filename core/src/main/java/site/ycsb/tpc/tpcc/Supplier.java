@@ -63,6 +63,10 @@ public class Supplier {
     return data.get("su_comment").asText();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }

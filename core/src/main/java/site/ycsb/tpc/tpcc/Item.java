@@ -47,6 +47,10 @@ public class Item {
     return data.get("i_data").asText();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }

@@ -55,6 +55,10 @@ public class Order {
     return data.get("o_entry_d").asInt();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }

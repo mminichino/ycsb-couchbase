@@ -82,6 +82,10 @@ public class OrderLine {
     return this.data.get("ol_dist_info").asText();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }

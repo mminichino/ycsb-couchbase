@@ -67,6 +67,10 @@ public class Warehouse {
     return data.get("w_ytd").asDouble();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }

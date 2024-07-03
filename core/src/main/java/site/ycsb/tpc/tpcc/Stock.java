@@ -116,6 +116,10 @@ public class Stock {
     return data.get("s_data").asText();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }

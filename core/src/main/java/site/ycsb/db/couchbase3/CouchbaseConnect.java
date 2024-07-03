@@ -11,6 +11,8 @@ import com.couchbase.client.core.env.TimeoutConfig;
 import com.couchbase.client.core.error.BucketExistsException;
 import com.couchbase.client.core.error.BucketNotFoundException;
 import com.couchbase.client.core.error.DocumentNotFoundException;
+import com.couchbase.client.core.error.ScopeExistsException;
+import com.couchbase.client.core.error.CollectionExistsException;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.core.config.PortInfo;
 import com.couchbase.client.java.*;
@@ -452,6 +454,20 @@ public final class CouchbaseConnect {
     analytics.dropIndex(indexName, bucketName, dropIndexAnalyticsOptions().ignoreIfNotExists(true));
   }
 
+  public void createScope(String bucketName, String scopeName) {
+    if (Objects.equals(scopeName, "_default")) {
+      return;
+    }
+    bucketMgr.getBucket(bucketName);
+    bucket = cluster.bucket(bucketName);
+    CollectionManager collectionManager = bucket.collections();
+    try {
+      collectionManager.createScope(scopeName);
+    } catch (ScopeExistsException e) {
+      LOGGER.info(String.format("Scope %s already exists in cluster", scopeName));
+    }
+  }
+
   public void createCollection(String bucketName, String scopeName, String collectionName) {
     if (Objects.equals(collectionName, "_default")) {
       return;
@@ -459,7 +475,11 @@ public final class CouchbaseConnect {
     bucketMgr.getBucket(bucketName);
     bucket = cluster.bucket(bucketName);
     CollectionManager collectionManager = bucket.collections();
-    collectionManager.createCollection(scopeName, collectionName);
+    try {
+      collectionManager.createCollection(scopeName, collectionName);
+    } catch (CollectionExistsException e) {
+      LOGGER.info(String.format("Collection %s already exists in cluster", collectionName));
+    }
   }
 
   public boolean isAnalyticsEnabled() {

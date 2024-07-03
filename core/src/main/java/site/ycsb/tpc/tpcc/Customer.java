@@ -4,9 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import site.ycsb.tpc.TPCCUtil;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
 public class Customer {
   private final ObjectNode data;
 
@@ -150,6 +147,10 @@ public class Customer {
 
   public String c_data() {
     return data.get("c_data").asText();
+  }
+
+  public ObjectNode asNode() {
+    return data;
   }
 
   public String asJson() {

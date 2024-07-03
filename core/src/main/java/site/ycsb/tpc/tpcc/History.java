@@ -62,6 +62,10 @@ public class History {
     return data.get("h_data").asText();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }

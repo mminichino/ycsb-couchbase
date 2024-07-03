@@ -40,6 +40,10 @@ public class Nation {
     return data.get("n_comment").asText();
   }
 
+  public ObjectNode asNode() {
+    return data;
+  }
+
   public String asJson() {
     return data.toString();
   }
