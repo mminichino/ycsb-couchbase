@@ -10,8 +10,7 @@ import java.util.stream.IntStream;
 
 public final class TPCCUtil {
   private final Random rand = new Random();
-  private final String runTime = "2021-01-01 00:00:00";
-  private Date runDate = new Date();
+  public final String DATE_FORMAT = "yyyy-MM-dd hh:mm:ss";
   private Date startDate = new Date();
   private Date endDate = new Date();
   private final String[] lastNameParts = {
@@ -101,9 +100,10 @@ public final class TPCCUtil {
     ordPerDist = ord;
     nums = new int[custPerDist];
 
-    String dateFormat = "%Y-%m-%d %H:%M:%S";
-    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+    SimpleDateFormat timeStampFormat = new SimpleDateFormat(DATE_FORMAT);
+    Date runDate;
     try {
+      String runTime = "2021-01-01 00:00:00";
       runDate = timeStampFormat.parse(runTime);
     } catch (ParseException e) {
       throw new RuntimeException(e);
@@ -141,13 +141,13 @@ public final class TPCCUtil {
   }
 
   public Date randomDate(Date start, Date end) {
-    long deltaSecs = (start.getTime() - end.getTime()) / 1000;
+    long deltaSecs = (end.getTime() - start.getTime()) / 1000;
     int randOffset = randomNumber(1, Math.toIntExact(deltaSecs));
     return addSeconds(randOffset, start);
   }
 
   public Date randomDate() {
-    long deltaSecs = (startDate.getTime() - endDate.getTime()) / 1000;
+    long deltaSecs = (endDate.getTime() - startDate.getTime()) / 1000;
     int randOffset = randomNumber(1, Math.toIntExact(deltaSecs));
     return addSeconds(randOffset, startDate);
   }
@@ -161,26 +161,22 @@ public final class TPCCUtil {
   }
 
   public String randomDateText(Date start, Date end) {
-    String dateFormat = "%Y-%m-%d %H:%M:%S";
-    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+    SimpleDateFormat timeStampFormat = new SimpleDateFormat(DATE_FORMAT);
     return timeStampFormat.format(randomDate(start, end));
   }
 
   public String startDateText() {
-    String dateFormat = "%Y-%m-%d %H:%M:%S";
-    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+    SimpleDateFormat timeStampFormat = new SimpleDateFormat(DATE_FORMAT);
     return timeStampFormat.format(startDate);
   }
 
   public String endDateText() {
-    String dateFormat = "%Y-%m-%d %H:%M:%S";
-    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+    SimpleDateFormat timeStampFormat = new SimpleDateFormat(DATE_FORMAT);
     return timeStampFormat.format(endDate);
   }
 
   public String dateToString(Date date) {
-    String dateFormat = "%Y-%m-%d %H:%M:%S";
-    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+    SimpleDateFormat timeStampFormat = new SimpleDateFormat(DATE_FORMAT);
     return timeStampFormat.format(date);
   }
 
