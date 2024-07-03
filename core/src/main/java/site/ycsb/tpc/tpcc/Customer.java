@@ -41,10 +41,7 @@ public class Customer {
     float c_balance = (float) -10.0;
 
     String c_data = util.makeAlphaString(300, 500);
-
-    String dateFormat = "yy-MM-dd'T'HH:mm:ss";
-    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
-    String date = timeStampFormat.format(new Date());
+    String date = util.startDateText();
 
     ObjectMapper mapper = new ObjectMapper();
     this.data = mapper.createObjectNode();

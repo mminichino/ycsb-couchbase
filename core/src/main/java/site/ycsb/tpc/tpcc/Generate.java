@@ -6,10 +6,7 @@ import site.ycsb.tpc.TPCCUtil;
 import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Logger;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Stream;
 
 public class Generate {
@@ -252,12 +249,13 @@ public class Generate {
 
     for (int o_id = 1; o_id <= ordPerDist; o_id++) {
       int o_ol_cnt = util.randomNumber(5, 15);
-      orders.add(new Order(o_id, districtNum, warehouseNum, util));
+      Date orderDate = util.randomDate();
+      orders.add(new Order(o_id, districtNum, warehouseNum, orderDate, util));
       if (o_id > 2100) {
         newOrders.add(new NewOrder(o_id, districtNum, warehouseNum));
       }
       for (int ol = 1; ol <= o_ol_cnt; ol++) {
-        orderLine.add(new OrderLine(ol, o_id, districtNum, warehouseNum, maxItems, util));
+        orderLine.add(new OrderLine(ol, o_id, districtNum, warehouseNum, orderDate, maxItems, util));
       }
     }
 

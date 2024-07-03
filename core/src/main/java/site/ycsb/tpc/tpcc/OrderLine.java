@@ -10,7 +10,7 @@ import java.util.Date;
 public class OrderLine {
   private final ObjectNode data;
 
-  public OrderLine(int ol, int o_id, int o_d_id, int o_w_id, int maxItems, TPCCUtil util) {
+  public OrderLine(int ol, int o_id, int o_d_id, int o_w_id, Date orderDate, int maxItems, TPCCUtil util) {
     int ol_i_id = util.randomNumber(1, maxItems);
     int ol_quantity = 5;
     float ol_amount = (float) 0.0;
@@ -19,9 +19,9 @@ public class OrderLine {
 
     float tmp_float = (float) ((float) (util.randomNumber(10, 10000)) / 100.0);
 
-    String dateFormat = "yy-MM-dd'T'HH:mm:ss";
-    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
-    String date = timeStampFormat.format(new Date());
+    Date startDate = util.addDays(2, orderDate);
+    Date endDate = util.addDays(151, orderDate);
+    String date = util.randomDateText(startDate, endDate);
 
     ObjectMapper mapper = new ObjectMapper();
     this.data = mapper.createObjectNode();

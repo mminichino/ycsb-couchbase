@@ -10,14 +10,14 @@ import java.util.Date;
 public class Order {
   private final ObjectNode data;
 
-  public Order(int o_id, int o_d_id, int o_w_id, TPCCUtil util) {
+  public Order(int o_id, int o_d_id, int o_w_id, Date orderDate, TPCCUtil util) {
     int o_c_id = util.getPermutation();
     int o_carrier_id = util.randomNumber(1, 10);
     int o_ol_cnt = util.randomNumber(5, 15);
 
     String dateFormat = "yy-MM-dd'T'HH:mm:ss";
     SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
-    String date = timeStampFormat.format(new Date());
+    String date = util.dateToString(orderDate);
 
     ObjectMapper mapper = new ObjectMapper();
     this.data = mapper.createObjectNode();

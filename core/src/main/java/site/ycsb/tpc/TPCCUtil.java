@@ -2,12 +2,18 @@ package site.ycsb.tpc;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public final class TPCCUtil {
   private final Random rand = new Random();
+  private final String runTime = "2021-01-01 00:00:00";
+  private Date runDate = new Date();
+  private Date startDate = new Date();
+  private Date endDate = new Date();
   private final String[] lastNameParts = {
       "BAR", "OUGHT", "ABLE", "PRI", "PRES", "ESE",
       "ANTI", "CALLY", "ATION", "EING"
@@ -94,10 +100,96 @@ public final class TPCCUtil {
     custPerDist = cust;
     ordPerDist = ord;
     nums = new int[custPerDist];
+
+    String dateFormat = "%Y-%m-%d %H:%M:%S";
+    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+    try {
+      runDate = timeStampFormat.parse(runTime);
+    } catch (ParseException e) {
+      throw new RuntimeException(e);
+    }
+    endDate = subtractDays(1, runDate);
+    startDate = subtractYears(7, endDate);
+  }
+
+  private Date subtractDays(int days, Date date) {
+    Calendar c = Calendar.getInstance();
+    c.setTime(date);
+    c.add(Calendar.DATE, -days);
+    return c.getTime();
+  }
+
+  private Date subtractYears(int years, Date date) {
+    Calendar c = Calendar.getInstance();
+    c.setTime(date);
+    c.add(Calendar.YEAR, -years);
+    return c.getTime();
+  }
+
+  public Date addSeconds(int seconds, Date date) {
+    Calendar c = Calendar.getInstance();
+    c.setTime(date);
+    c.add(Calendar.SECOND, seconds);
+    return c.getTime();
+  }
+
+  public Date addDays(int days, Date date) {
+    Calendar c = Calendar.getInstance();
+    c.setTime(date);
+    c.add(Calendar.DATE, days);
+    return c.getTime();
+  }
+
+  public Date randomDate(Date start, Date end) {
+    long deltaSecs = (start.getTime() - end.getTime()) / 1000;
+    int randOffset = randomNumber(1, Math.toIntExact(deltaSecs));
+    return addSeconds(randOffset, start);
+  }
+
+  public Date randomDate() {
+    long deltaSecs = (startDate.getTime() - endDate.getTime()) / 1000;
+    int randOffset = randomNumber(1, Math.toIntExact(deltaSecs));
+    return addSeconds(randOffset, startDate);
+  }
+
+  public Date getStartDate() {
+    return startDate;
+  }
+
+  public Date getEndDate() {
+    return endDate;
+  }
+
+  public String randomDateText(Date start, Date end) {
+    String dateFormat = "%Y-%m-%d %H:%M:%S";
+    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+    return timeStampFormat.format(randomDate(start, end));
+  }
+
+  public String startDateText() {
+    String dateFormat = "%Y-%m-%d %H:%M:%S";
+    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+    return timeStampFormat.format(startDate);
+  }
+
+  public String endDateText() {
+    String dateFormat = "%Y-%m-%d %H:%M:%S";
+    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+    return timeStampFormat.format(endDate);
+  }
+
+  public String dateToString(Date date) {
+    String dateFormat = "%Y-%m-%d %H:%M:%S";
+    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
+    return timeStampFormat.format(date);
   }
 
   public int randomNumber(int minValue, int maxValue) {
     return rand.nextInt((maxValue - minValue) + 1) + minValue;
+  }
+
+  public long randomLongNumber(long minValue, long maxValue) {
+    return rand.nextLong((maxValue - minValue) + 1) + minValue;
   }
 
   public String makeAlphaString(int minValue, int maxValue) {
