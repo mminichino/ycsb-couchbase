@@ -90,7 +90,6 @@ public class Generate {
     this.batchSize = builder.batchSize;
     this.enableDebug = builder.enableDebug;
     this.util = new TPCCUtil(custPerDist, ordPerDist);
-    this.util.initPermutation();
   }
 
   public void createSchema() {
@@ -221,6 +220,7 @@ public class Generate {
 
   public void generateOrders(int warehouseNum, int districtNum) {
     LOGGER.debug("begin order data generation for warehouse {}", warehouseNum);
+    util.initPermutation();
 
     for (int o_id = 1; o_id <= ordPerDist; o_id++) {
       int o_ol_cnt = util.randomNumber(5, 15);

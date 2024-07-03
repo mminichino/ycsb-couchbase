@@ -69,7 +69,7 @@ public class AnalyticsTPCLoad extends LoadDriver {
   private static String collectionName;
   private boolean adhoc;
   private int maxParallelism;
-  private boolean analyticsMode;
+  private boolean defaultScope;
   private static final AtomicLong recordNumber = new AtomicLong(0);
 
   @Override
@@ -103,7 +103,7 @@ public class AnalyticsTPCLoad extends LoadDriver {
       LOGGER.setLevel(Level.DEBUG);
     }
 
-    analyticsMode = properties.getProperty("couchbase.analytics", "false").equals("true");
+    defaultScope = properties.getProperty("couchbase.defaultScope", "false").equals("true");
 
     adhoc = properties.getProperty("couchbase.adhoc", "false").equals("true");
     maxParallelism = Integer.parseInt(properties.getProperty("couchbase.maxParallelism", "0"));
@@ -330,12 +330,8 @@ public class AnalyticsTPCLoad extends LoadDriver {
     return createAnalyticsCollection("order_line", orderLineTable);
   }
 
-  private String keyspace() {
-    if (!analyticsMode) {
-      return bucketName + "." + scopeName + "." + collectionName;
-    } else {
-      return bucketName;
-    }
+  private String keyspace(String collection) {
+    return bucketName + "." + scopeName + "." + collection;
   }
 
   public Status runQuery(String statement) {
@@ -350,8 +346,8 @@ public class AnalyticsTPCLoad extends LoadDriver {
     }
   }
 
-  public Status insertRecords(String json) {
-    String statement = "UPSERT INTO " + keyspace() + " (" + json + ")";
+  public Status insertRecords(String collection, String json) {
+    String statement = "UPSERT INTO " + keyspace(collection) + " (" + json + ")";
     try {
       return retryBlock(() -> {
         cluster.analyticsQuery(statement, analyticsOptions());
@@ -365,7 +361,13 @@ public class AnalyticsTPCLoad extends LoadDriver {
 
   @Override
   public void insertItemBatch(List<Item> batch) {
-
+    LOGGER.info("Called with {} items", batch.size());
+    List<String> result = new ArrayList<>();
+    for (Item i : batch) {
+      result.add(i.asJson());
+    }
+    String block = String.join(",", result);
+    insertRecords("item", block);
   }
 
   @Override

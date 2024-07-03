@@ -121,6 +121,8 @@ public abstract class LoadDriver extends BenchLoad {
 
     LOGGER.info("Beginning data generation phase");
 
+    generate();
+
     insertItems();
     insertWarehouses();
     insertStock();
