@@ -10,9 +10,15 @@ import com.couchbase.client.core.env.TimeoutConfig;
 import com.couchbase.client.core.error.CollectionExistsException;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.env.ClusterEnvironment;
+import com.couchbase.client.java.kv.MutationResult;
+import com.couchbase.client.java.manager.analytics.AnalyticsIndexManager;
 import com.couchbase.client.java.manager.collection.CollectionManager;
 import com.couchbase.client.java.manager.query.CollectionQueryIndexManager;
 import com.couchbase.client.java.manager.query.CreateQueryIndexOptions;
+import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
+import static com.couchbase.client.java.manager.analytics.CreateDatasetAnalyticsOptions.createDatasetAnalyticsOptions;
+import static com.couchbase.client.java.manager.analytics.CreateDataverseAnalyticsOptions.createDataverseAnalyticsOptions;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.LoggerFactory;
 import site.ycsb.Status;
 import site.ycsb.TableKeys;
@@ -26,8 +32,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 import static com.couchbase.client.java.analytics.AnalyticsOptions.analyticsOptions;
@@ -58,6 +68,10 @@ public class CouchbaseTPCLoad extends LoadDriver {
   private int maxParallelism;
   private boolean defaultScope;
   private static final AtomicLong recordNumber = new AtomicLong(0);
+  private final List<Future<MutationResult>> tasks = new ArrayList<>();
+  private ExecutorService executor = Executors.newFixedThreadPool(32);
+  private boolean analyticsMode;
+  private boolean debug;
 
   @Override
   public void init() {
@@ -84,12 +98,13 @@ public class CouchbaseTPCLoad extends LoadDriver {
     scopeName = properties.getProperty(COUCHBASE_SCOPE, "_default");
     collectionName = properties.getProperty(COUCHBASE_COLLECTION, "_default");
     boolean sslMode = properties.getProperty(COUCHBASE_SSL_MODE, "false").equals("true");
-    boolean debug = properties.getProperty("couchbase.debug", "false").equals("true");
+    debug = properties.getProperty("couchbase.debug", "false").equals("true");
 
     if (debug) {
       LOGGER.setLevel(Level.DEBUG);
     }
 
+    analyticsMode = properties.getProperty("couchbase.analytics", "false").equals("true");
     defaultScope = properties.getProperty("couchbase.defaultScope", "false").equals("true");
 
     adhoc = properties.getProperty("couchbase.adhoc", "false").equals("true");
@@ -182,6 +197,27 @@ public class CouchbaseTPCLoad extends LoadDriver {
     return block.call();
   }
 
+  public void taskAdd(Callable<MutationResult> task) {
+    tasks.add(executor.submit(task));
+  }
+
+  public boolean taskWait() {
+    boolean status = true;
+    for (Future<MutationResult> future : tasks) {
+      try {
+        MutationResult result = future.get();
+        if (debug) {
+          LOGGER.debug("Task status: {}", result);
+        }
+      } catch (InterruptedException | ExecutionException e) {
+        LOGGER.error(e.getMessage(), e);
+        status = false;
+      }
+    }
+    tasks.clear();
+    return status;
+  }
+
   public void createFieldIndex(String collectionName, String field) {
     Collection collection = bucket.scope(scopeName).collection(collectionName);
     CollectionQueryIndexManager queryIndexMgr = collection.queryIndexes();
@@ -199,41 +235,28 @@ public class CouchbaseTPCLoad extends LoadDriver {
     try {
       LOGGER.debug("Creating collection: {}", name);
       collectionManager.createCollection(scopeName, name);
+      if (analyticsMode) {
+        createAnalyticsCollection(name);
+      }
       for (String field : indexFields) {
         createFieldIndex(name, field);
       }
-      return Status.OK;
     } catch (CollectionExistsException e) {
       LOGGER.debug("Collection {} already exists", name);
-      return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("createTable transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
     }
+    return Status.OK;
   }
 
-  public Status createAnalyticsCollection(String name, TableKeys keys) {
+  public void createAnalyticsCollection(String name) {
     String statement;
-    String keyType;
 
-    switch(keys.primaryKeyType) {
-      case INTEGER:
-        keyType = "int";
-        break;
-      case FLOAT:
-        keyType = "double";
-        break;
-      default:
-        keyType = "string";
-    }
-
-    statement = "CREATE DATABASE " + bucketName + " IF NOT EXISTS";
+    statement = "CREATE ANALYTICS SCOPE " + bucketName + "." + scopeName + " IF NOT EXISTS";
     runQuery(statement);
-    statement = "CREATE SCOPE " + bucketName + "." + scopeName + " IF NOT EXISTS";
+    statement = "CREATE ANALYTICS COLLECTION IF NOT EXISTS " + bucketName + "." + scopeName + "." + name + " ON " + bucketName + "." + scopeName + "." + name;
     runQuery(statement);
-    statement = "CREATE COLLECTION " + bucketName + "." + scopeName + "." + name + " IF NOT EXISTS PRIMARY KEY (" + keys.primaryKeyName + ":" + keyType + ")";
-    runQuery(statement);
-    return Status.OK;
   }
 
   @Override
@@ -373,137 +396,156 @@ public class CouchbaseTPCLoad extends LoadDriver {
     }
   }
 
+  public MutationResult insert(Collection collection, String id, ObjectNode record) {
+    try {
+    return retryBlock(() -> collection.upsert(id, record, upsertOptions().timeout(Duration.ofSeconds(10))));
+    } catch (Throwable t) {
+      LOGGER.error("insert transaction exception: {}", t.getMessage(), t);
+      return null;
+    }
+  }
+
   @Override
   public void insertItemBatch(List<Item> batch) {
     LOGGER.info("insertItemBatch: called with {} items", batch.size());
     Collection collection = bucket.scope(scopeName).collection("item");
-    List<String> result = new ArrayList<>();
     for (Item i : batch) {
-//      collection.insert()
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = itemTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("item", block);
+    taskWait();
   }
 
   @Override
   public void insertWarehouseBatch(List<Warehouse> batch) {
     LOGGER.info("insertWarehouseBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("warehouse");
     for (Warehouse i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = warehouseTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("warehouse", block);
+    taskWait();
   }
 
   @Override
   public void insertStockBatch(List<Stock> batch) {
     LOGGER.info("insertStockBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("stock");
     for (Stock i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = stockTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("stock", block);
+    taskWait();
   }
 
   @Override
   public void insertDistrictBatch(List<District> batch) {
     LOGGER.info("insertDistrictBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("district");
     for (District i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = districtTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("district", block);
+    taskWait();
   }
 
   @Override
   public void insertCustomerBatch(List<Customer> batch) {
     LOGGER.info("insertCustomerBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("customer");
     for (Customer i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = customerTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("customer", block);
+    taskWait();
   }
 
   @Override
   public void insertHistoryBatch(List<History> batch) {
     LOGGER.info("insertHistoryBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("history");
     for (History i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = historyTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("history", block);
+    taskWait();
   }
 
   @Override
   public void insertOrderBatch(List<Order> batch) {
     LOGGER.info("insertOrderBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("order");
     for (Order i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = orderTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("orders", block);
+    taskWait();
   }
 
   @Override
   public void insertNewOrderBatch(List<NewOrder> batch) {
     LOGGER.info("insertNewOrderBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("new_orders");
     for (NewOrder i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = newOrderTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("new_orders", block);
+    taskWait();
   }
 
   @Override
   public void insertOrderLineBatch(List<OrderLine> batch) {
     LOGGER.info("insertOrderLineBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("order_line");
     for (OrderLine i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = orderLineTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("order_line", block);
+    taskWait();
   }
 
   @Override
   public void insertSupplierBatch(List<Supplier> batch) {
     LOGGER.info("insertSupplierBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("supplier");
     for (Supplier i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = supplierTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("supplier", block);
+    taskWait();
   }
 
   @Override
   public void insertNationBatch(List<Nation> batch) {
     LOGGER.info("insertNationBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("nation");
     for (Nation i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = nationTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("nation", block);
+    taskWait();
   }
 
   @Override
   public void insertRegionBatch(List<Region> batch) {
     LOGGER.info("insertRegionBatch: called with {} items", batch.size());
-    List<String> result = new ArrayList<>();
+    Collection collection = bucket.scope(scopeName).collection("region");
     for (Region i : batch) {
-      result.add(i.asJson());
+      ObjectNode record = i.asNode();
+      String id = regionTable.getDocumentId(record);
+      taskAdd(() -> insert(collection, id, record));
     }
-    String block = String.join(",", result);
-    insertRecords("region", block);
+    taskWait();
   }
 }
