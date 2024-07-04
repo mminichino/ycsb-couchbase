@@ -61,6 +61,18 @@ public class CouchbaseTPCLoad extends LoadDriver {
   private static volatile Scope scope;
   private static volatile CollectionManager collectionManager;
   private static volatile ClusterEnvironment environment;
+  private static volatile Collection itemCollection;
+  private static volatile Collection warehouseCollection;
+  private static volatile Collection stockCollection;
+  private static volatile Collection districtCollection;
+  private static volatile Collection customerCollection;
+  private static volatile Collection historyCollection;
+  private static volatile Collection orderCollection;
+  private static volatile Collection newOrderCollection;
+  private static volatile Collection orderLineCollection;
+  private static volatile Collection supplierCollection;
+  private static volatile Collection nationCollection;
+  private static volatile Collection regionCollection;
   private static String bucketName;
   private static String scopeName;
   private static String collectionName;
@@ -408,11 +420,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertItemBatch(List<Item> batch) {
     LOGGER.info("insertItemBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("item");
+    synchronized (INIT_COORDINATOR) {
+      if (itemCollection == null) {
+        itemCollection = bucket.scope(scopeName).collection("item");
+      }
+    }
     for (Item i : batch) {
       ObjectNode record = i.asNode();
       String id = itemTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(itemCollection, id, record));
     }
     taskWait();
   }
@@ -420,11 +436,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertWarehouseBatch(List<Warehouse> batch) {
     LOGGER.info("insertWarehouseBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("warehouse");
+    synchronized (INIT_COORDINATOR) {
+      if (warehouseCollection == null) {
+        warehouseCollection = bucket.scope(scopeName).collection("warehouse");
+      }
+    }
     for (Warehouse i : batch) {
       ObjectNode record = i.asNode();
       String id = warehouseTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(warehouseCollection, id, record));
     }
     taskWait();
   }
@@ -432,11 +452,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertStockBatch(List<Stock> batch) {
     LOGGER.info("insertStockBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("stock");
+    synchronized (INIT_COORDINATOR) {
+      if (stockCollection == null) {
+        stockCollection = bucket.scope(scopeName).collection("stock");
+      }
+    }
     for (Stock i : batch) {
       ObjectNode record = i.asNode();
       String id = stockTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(stockCollection, id, record));
     }
     taskWait();
   }
@@ -444,11 +468,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertDistrictBatch(List<District> batch) {
     LOGGER.info("insertDistrictBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("district");
+    synchronized (INIT_COORDINATOR) {
+      if (districtCollection == null) {
+        districtCollection = bucket.scope(scopeName).collection("district");
+      }
+    }
     for (District i : batch) {
       ObjectNode record = i.asNode();
       String id = districtTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(districtCollection, id, record));
     }
     taskWait();
   }
@@ -456,11 +484,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertCustomerBatch(List<Customer> batch) {
     LOGGER.info("insertCustomerBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("customer");
+    synchronized (INIT_COORDINATOR) {
+      if (customerCollection == null) {
+        customerCollection = bucket.scope(scopeName).collection("customer");
+      }
+    }
     for (Customer i : batch) {
       ObjectNode record = i.asNode();
       String id = customerTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(customerCollection, id, record));
     }
     taskWait();
   }
@@ -468,11 +500,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertHistoryBatch(List<History> batch) {
     LOGGER.info("insertHistoryBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("history");
+    synchronized (INIT_COORDINATOR) {
+      if (historyCollection == null) {
+        historyCollection = bucket.scope(scopeName).collection("history");
+      }
+    }
     for (History i : batch) {
       ObjectNode record = i.asNode();
       String id = historyTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(historyCollection, id, record));
     }
     taskWait();
   }
@@ -480,11 +516,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertOrderBatch(List<Order> batch) {
     LOGGER.info("insertOrderBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("order");
+    synchronized (INIT_COORDINATOR) {
+      if (orderCollection == null) {
+        orderCollection = bucket.scope(scopeName).collection("orders");
+      }
+    }
     for (Order i : batch) {
       ObjectNode record = i.asNode();
       String id = orderTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(orderCollection, id, record));
     }
     taskWait();
   }
@@ -492,11 +532,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertNewOrderBatch(List<NewOrder> batch) {
     LOGGER.info("insertNewOrderBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("new_orders");
+    synchronized (INIT_COORDINATOR) {
+      if (newOrderCollection == null) {
+        newOrderCollection = bucket.scope(scopeName).collection("new_orders");
+      }
+    }
     for (NewOrder i : batch) {
       ObjectNode record = i.asNode();
       String id = newOrderTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(newOrderCollection, id, record));
     }
     taskWait();
   }
@@ -504,11 +548,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertOrderLineBatch(List<OrderLine> batch) {
     LOGGER.info("insertOrderLineBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("order_line");
+    synchronized (INIT_COORDINATOR) {
+      if (orderLineCollection == null) {
+        orderLineCollection = bucket.scope(scopeName).collection("order_line");
+      }
+    }
     for (OrderLine i : batch) {
       ObjectNode record = i.asNode();
       String id = orderLineTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(orderLineCollection, id, record));
     }
     taskWait();
   }
@@ -516,11 +564,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertSupplierBatch(List<Supplier> batch) {
     LOGGER.info("insertSupplierBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("supplier");
+    synchronized (INIT_COORDINATOR) {
+      if (supplierCollection == null) {
+        supplierCollection = bucket.scope(scopeName).collection("supplier");
+      }
+    }
     for (Supplier i : batch) {
       ObjectNode record = i.asNode();
       String id = supplierTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(supplierCollection, id, record));
     }
     taskWait();
   }
@@ -528,11 +580,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertNationBatch(List<Nation> batch) {
     LOGGER.info("insertNationBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("nation");
+    synchronized (INIT_COORDINATOR) {
+      if (nationCollection == null) {
+        nationCollection = bucket.scope(scopeName).collection("nation");
+      }
+    }
     for (Nation i : batch) {
       ObjectNode record = i.asNode();
       String id = nationTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(nationCollection, id, record));
     }
     taskWait();
   }
@@ -540,11 +596,15 @@ public class CouchbaseTPCLoad extends LoadDriver {
   @Override
   public void insertRegionBatch(List<Region> batch) {
     LOGGER.info("insertRegionBatch: called with {} items", batch.size());
-    Collection collection = bucket.scope(scopeName).collection("region");
+    synchronized (INIT_COORDINATOR) {
+      if (regionCollection == null) {
+        regionCollection = bucket.scope(scopeName).collection("region");
+      }
+    }
     for (Region i : batch) {
       ObjectNode record = i.asNode();
       String id = regionTable.getDocumentId(record);
-      taskAdd(() -> insert(collection, id, record));
+      taskAdd(() -> insert(regionCollection, id, record));
     }
     taskWait();
   }
