@@ -250,13 +250,13 @@ public class Generate {
     for (int o_id = 1; o_id <= ordPerDist; o_id++) {
       int o_ol_cnt = util.randomNumber(5, 15);
       Date orderDate = util.randomDate();
-      orders.add(new Order(o_id, districtNum, warehouseNum, orderDate, util));
+      orders.add(new Order(o_id, districtNum, warehouseNum, orderDate, maxItems, util));
       if (o_id > 2100) {
         newOrders.add(new NewOrder(o_id, districtNum, warehouseNum));
       }
-      for (int ol = 1; ol <= o_ol_cnt; ol++) {
-        orderLine.add(new OrderLine(ol, o_id, districtNum, warehouseNum, orderDate, maxItems, util));
-      }
+//      for (int ol = 1; ol <= o_ol_cnt; ol++) {
+//        orderLine.add(new OrderLine(ol, o_id, districtNum, warehouseNum, orderDate, maxItems, util));
+//      }
     }
 
     LOGGER.debug("order table data generation complete for warehouse {}", warehouseNum);

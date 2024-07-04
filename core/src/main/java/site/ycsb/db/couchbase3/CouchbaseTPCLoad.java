@@ -327,7 +327,7 @@ public class CouchbaseTPCLoad extends LoadDriver {
 
   @Override
   public Status createOrderTable() {
-    System.out.println("Creating order table");
+    System.out.println("Creating orders table");
     List<String> indexFields = new ArrayList<>();
     indexFields.add(orderTable.primaryKeyName);
     indexFields.addAll(orderTable.foreignKeyNames);

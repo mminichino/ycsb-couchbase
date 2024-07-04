@@ -126,7 +126,7 @@ public abstract class LoadDriver extends BenchLoad {
     createHistoryTable();
     createOrderTable();
     createNewOrderTable();
-    createOrderLineTable();
+//    createOrderLineTable();
     createSupplierTable();
     createNationTable();
     createRegionTable();
@@ -143,7 +143,7 @@ public abstract class LoadDriver extends BenchLoad {
     insertHistory();
     insertOrders();
     insertNewOrders();
-    insertOrderLines();
+//    insertOrderLines();
     insertSupplier();
     insertNation();
     insertRegion();
