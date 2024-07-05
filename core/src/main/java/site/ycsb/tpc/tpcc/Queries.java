@@ -1,7 +1,7 @@
 package site.ycsb.tpc.tpcc;
 
 public class Queries {
-  private static final String[] sqlStatements = {
+  public static final String[] sqlStatements = {
       // Q01
       "SELECT ol.ol_number ," +
       "SUM(ol.ol_quantity) as sum_qty ," +
@@ -313,7 +313,7 @@ public class Queries {
       "ORDER BY SUBSTR1(c.c_state,1,1)"
   };
 
-  int [][] queryPermutations = {
+  public final int[][] queryPermutations = {
       {  14,  2,  9,  20,  6,  17,  18,  8,  21,  13,  3,  22,  16,  4,  11,  15,  1,  10,  19,  5,  7,  12,  },
       {  21,  3,  18,  5,  11,  7,  6,  20,  17,  12,  16,  15,  13,  10,  2,  8,  14,  19,  9,  22,  1,  4,  },
       {  6,  17,  14,  16,  19,  10,  9,  2,  15,  8,  5,  22,  12,  7,  13,  18,  1,  4,  20,  3,  11,  21,  },

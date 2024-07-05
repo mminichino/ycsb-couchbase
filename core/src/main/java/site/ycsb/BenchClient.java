@@ -195,8 +195,14 @@ public final class BenchClient {
   /**
    * Do not run setup and cleanup automation.
    */
-  public static final String MANUAL_MODE = "false";
+  public static final String MANUAL_MODE = "test.manualMode";
   public static boolean manualMode;
+
+  /**
+   * Run test mode.
+   */
+  public static final String TEST_MODE = "test.testMode";
+  public static boolean testMode;
 
   /**
    * Name of the workload property file.
@@ -209,7 +215,7 @@ public final class BenchClient {
   /**
    * An optional thread used to track progress and measure JVM stats.
    */
-  private static SQLStatusThread statusthread = null;
+  private static BenchStatusThread statusthread = null;
 
   private static final AtomicInteger opsCounter = new AtomicInteger(0);
 
@@ -384,6 +390,7 @@ public final class BenchClient {
     testCleanup = props.getProperty(TEST_CLEANUP_PROPERTY, null);
     boolean loadMode = props.getProperty(LOAD_MODE_PROPERTY, "true").equals("false");
     manualMode = props.getProperty(MANUAL_MODE, "false").equals("true");
+    testMode = props.getProperty(TEST_MODE, "false").equals("true");
 
     int threadCountMax = Integer.parseInt(props.getProperty(THREAD_COUNT_MAX_PROPERTY, "2147483647"));
     if (threadCountMax < threadcount) {
@@ -420,20 +427,30 @@ public final class BenchClient {
 
     Measurements.setProperties(props);
 
-    SQLWorkload workload = getWorkload(props);
+    BenchWorkload workload = getWorkload(props);
 
     final Tracer tracer = getTracer(props, workload);
 
-    long records = initWorkload(execClass, props, warningthread, workload, tracer);
-
-    props.setProperty(RECORD_COUNT_PROPERTY, String.valueOf(records));
-    props.setProperty(INSERT_COUNT_PROPERTY, String.valueOf(records));
+    initWorkload(execClass, props, warningthread, workload, tracer);
 
     System.err.printf("Starting test with %d threads\n", threadcount);
     final CountDownLatch completeLatch = new CountDownLatch(threadcount);
 
-    final List<SQLClientThread> clients = initDb(execClass, props, threadcount, targetperthreadperms,
+    final List<BenchClientThread> clients = initDb(execClass, props, threadcount, targetperthreadperms,
         workload, tracer, completeLatch);
+
+    if (status) {
+      boolean standardstatus = false;
+      if (props.getProperty(Measurements.MEASUREMENT_TYPE_PROPERTY, "").compareTo("timeseries") == 0) {
+        standardstatus = true;
+      }
+      int statusIntervalSeconds = Integer.parseInt(props.getProperty("status.interval", "10"));
+      boolean trackJVMStats = props.getProperty(Measurements.MEASUREMENT_TRACK_JVM_PROPERTY,
+          Measurements.MEASUREMENT_TRACK_JVM_PROPERTY_DEFAULT).equals("true");
+      statusthread = new BenchStatusThread(completeLatch, clients, label, standardstatus, statusIntervalSeconds,
+          trackJVMStats);
+      statusthread.start();
+    }
 
     if (enableStatistics && statisticsClass != null) {
       initStatisticsThread(statisticsClass, props);
@@ -446,9 +463,9 @@ public final class BenchClient {
 
     try (final TraceScope span = tracer.newScope(CLIENT_WORKLOAD_SPAN)) {
 
-      final Map<Thread, SQLClientThread> threads = new HashMap<>(threadcount);
-      for (SQLClientThread client : clients) {
-        threads.put(new Thread(tracer.wrap(client, "SQLClientThread")), client);
+      final Map<Thread, BenchClientThread> threads = new HashMap<>(threadcount);
+      for (BenchClientThread client : clients) {
+        threads.put(new Thread(tracer.wrap(client, "BenchClientThread")), client);
       }
 
       st = System.currentTimeMillis();
@@ -458,13 +475,13 @@ public final class BenchClient {
       }
 
       if (maxExecutionTime > 0) {
-        terminator = new SQLTerminatorThread(maxExecutionTime, threads.keySet(), workload);
+        terminator = new BenchTerminatorThread(maxExecutionTime, threads.keySet(), workload);
         terminator.start();
       }
 
       opsDone = 0;
 
-      for (Entry<Thread, SQLClientThread> entry : threads.entrySet()) {
+      for (Entry<Thread, BenchClientThread> entry : threads.entrySet()) {
         try {
           entry.getKey().join();
           opsDone += entry.getValue().getOpsDone();
@@ -535,33 +552,27 @@ public final class BenchClient {
     System.exit(0);
   }
 
-  private static List<SQLClientThread> initDb(String dbname, Properties props, int threadcount,
-                                           double targetperthreadperms, SQLWorkload workload, Tracer tracer,
+  private static List<BenchClientThread> initDb(String dbname, Properties props, int threadcount,
+                                           double targetperthreadperms, BenchWorkload workload, Tracer tracer,
                                            CountDownLatch completeLatch) {
     boolean initFailed = false;
-    boolean dotransactions = Boolean.valueOf(props.getProperty(LOAD_MODE_PROPERTY, String.valueOf(true)));
 
-    final List<SQLClientThread> clients = new ArrayList<>(threadcount);
+    final List<BenchClientThread> clients = new ArrayList<>(threadcount);
     try (final TraceScope span = tracer.newScope(CLIENT_INIT_SPAN)) {
       long opcount;
-      if (dotransactions) {
-        opcount = Long.parseLong(props.getProperty(OPERATION_COUNT_PROPERTY, "0"));
-      } else {
-        if (props.containsKey(INSERT_COUNT_PROPERTY)) {
-          opcount = Long.parseLong(props.getProperty(INSERT_COUNT_PROPERTY, "0"));
-        } else {
-          opcount = Long.parseLong(props.getProperty(RECORD_COUNT_PROPERTY, DEFAULT_RECORD_COUNT));
-        }
-      }
+
+      opcount = Long.parseLong(props.getProperty(OPERATION_COUNT_PROPERTY, "0"));
+
       if (threadcount > opcount && opcount > 0){
         threadcount = (int) opcount;
         System.out.println("Warning: the threadcount is bigger than recordcount, the threadcount will be recordcount!");
       }
+
       for (int threadid = 0; threadid < threadcount; threadid++) {
-        SQLDB db;
+        BenchRun db;
         try {
-          db = SQLDBFactory.newDB(dbname, props, tracer, opsCounter);
-        } catch (UnknownDBException e) {
+          db = BenchRunFactory.newRunner(dbname, props, tracer, opsCounter);
+        } catch (Exception e) {
           System.out.println("Unknown DB " + dbname);
           initFailed = true;
           break;
@@ -581,7 +592,7 @@ public final class BenchClient {
           ++threadopcount;
         }
 
-        SQLClientThread t = new SQLClientThread(db, dotransactions, workload, props, threadopcount, targetperthreadperms,
+        BenchClientThread t = new BenchClientThread(db, testMode, workload, props, threadopcount, targetperthreadperms,
             completeLatch, opsCounter);
         t.setThreadId(threadid);
         t.setThreadCount(threadcount);
@@ -596,25 +607,22 @@ public final class BenchClient {
     return clients;
   }
 
-  private static Tracer getTracer(Properties props, SQLWorkload workload) {
+  private static Tracer getTracer(Properties props, BenchWorkload workload) {
     return new Tracer.Builder("YCSB " + workload.getClass().getSimpleName())
         .conf(getHTraceConfiguration(props))
         .build();
   }
 
-  private static long initWorkload(String dbname, Properties props, Thread warningthread, SQLWorkload workload, Tracer tracer) {
-    boolean runMode = Boolean.parseBoolean(props.getProperty(LOAD_MODE_PROPERTY, String.valueOf(true)));
+  private static long initWorkload(String dbname, Properties props, Thread warningthread, BenchWorkload workload, Tracer tracer) {
     System.err.println("Initializing workload");
     try {
-      SQLDB db = SQLDBFactory.newDB(dbname, props, tracer, opsCounter);
+      BenchRun db = BenchRunFactory.newRunner(dbname, props, tracer, opsCounter);
       Objects.requireNonNull(db).init();
       try (final TraceScope ignored = tracer.newScope(CLIENT_WORKLOAD_INIT_SPAN)) {
         workload.init(props);
-        long records = workload.prepare(db, runMode);
         warningthread.interrupt();
-        return records;
       }
-    } catch (WorkloadException | UnknownDBException | DBException e) {
+    } catch (WorkloadException | DBException e) {
       LOGGER.error(e.getMessage(), e);
       System.exit(1);
     }
@@ -683,7 +691,7 @@ public final class BenchClient {
     };
   }
 
-  private static SQLWorkload getWorkload(Properties props) {
+  private static BenchWorkload getWorkload(Properties props) {
     ClassLoader classLoader = Client.class.getClassLoader();
 
     try {
@@ -697,12 +705,11 @@ public final class BenchClient {
     System.err.println();
     System.err.println("Loading workload...");
     try {
-      Class workloadclass = classLoader.loadClass(props.getProperty(WORKLOAD_PROPERTY));
+      Class<?> workloadclass = classLoader.loadClass(props.getProperty(WORKLOAD_PROPERTY));
 
-      return (SQLWorkload) workloadclass.newInstance();
+      return (BenchWorkload) workloadclass.getDeclaredConstructor().newInstance();
     } catch (Exception e) {
-      e.printStackTrace();
-      e.printStackTrace(System.out);
+      e.printStackTrace(System.err);
       System.exit(0);
     }
 
@@ -795,6 +802,9 @@ public final class BenchClient {
         argindex++;
       } else if (args[argindex].compareTo("-manual") == 0) {
         props.setProperty(MANUAL_MODE, String.valueOf(true));
+        argindex++;
+      } else if (args[argindex].compareTo("-test") == 0) {
+        props.setProperty(TEST_MODE, String.valueOf(true));
         argindex++;
       } else if (args[argindex].compareTo("-stats") == 0) {
         props.setProperty(STATISTICS_ENABLE_PROPERTY, String.valueOf(true));

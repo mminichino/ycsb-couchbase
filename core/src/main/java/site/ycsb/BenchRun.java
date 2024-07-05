@@ -3,7 +3,7 @@ package site.ycsb;
 import java.util.*;
 
 /**
- * SQL Database Driver
+ * Benchmark Driver
  */
 public abstract class BenchRun {
   private Properties properties = new Properties();
