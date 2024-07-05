@@ -53,6 +53,7 @@ public abstract class LoadDriver extends BenchLoad {
   private static int ordPerDist;
   private static int maxNumItems;
   private static int maxItemLen;
+  private static boolean separateOrderLine;
   private static boolean enableDebug;
   private static int warehouseCount;
 
@@ -71,6 +72,7 @@ public abstract class LoadDriver extends BenchLoad {
     maxNumItems = Integer.parseInt(p.getProperty("tpcc.maxNumItems", "15"));
     maxItemLen = Integer.parseInt(p.getProperty("tpcc.maxItemLen", "24"));
     warehouseCount = Integer.parseInt(p.getProperty("tpcc.warehouseCount", "1"));
+    separateOrderLine = Boolean.parseBoolean(p.getProperty("tpcc.separateOrderLine", "true"));
   }
 
   public Properties getProperties() {
@@ -126,7 +128,9 @@ public abstract class LoadDriver extends BenchLoad {
     createHistoryTable();
     createOrderTable();
     createNewOrderTable();
-//    createOrderLineTable();
+    if (separateOrderLine) {
+      createOrderLineTable();
+    }
     createSupplierTable();
     createNationTable();
     createRegionTable();
@@ -143,7 +147,9 @@ public abstract class LoadDriver extends BenchLoad {
     insertHistory();
     insertOrders();
     insertNewOrders();
-//    insertOrderLines();
+    if (separateOrderLine) {
+      insertOrderLines();
+    }
     insertSupplier();
     insertNation();
     insertRegion();
