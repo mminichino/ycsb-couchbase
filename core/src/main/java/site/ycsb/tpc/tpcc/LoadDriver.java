@@ -87,6 +87,7 @@ public abstract class LoadDriver extends BenchLoad {
         .ordPerDist(ordPerDist)
         .warehouseCount(warehouseCount)
         .maxItems(maxItems)
+        .separateOrderLine(separateOrderLine)
         .enableDebug(enableDebug)
         .build();
     generator.createSchema();
