@@ -112,7 +112,7 @@ public class Generate {
 
   public void createSchema() {
     generateItems();
-    for (int warehouse = 0; warehouse < warehouseCount; warehouse++) {
+    for (int warehouse = 1; warehouse <= warehouseCount; warehouse++) {
       generateWarehouse(warehouse);
       generateDistrict(warehouse);
     }

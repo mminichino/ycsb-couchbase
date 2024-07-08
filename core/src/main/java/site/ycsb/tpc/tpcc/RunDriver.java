@@ -15,12 +15,20 @@ public class RunDriver extends BenchWorkload {
       (Logger)LoggerFactory.getLogger("site.ycsb.tpc.tpcc.RunDriver");
   public static final String QUERIES_PROPERTY = "benchmark.queryClass";
   public static final String QUERIES_PROPERTY_DEFAULT = "site.ycsb.tpc.tpcc.SQLQueries";
+  public static final String QUERIES_NUM_PROPERTY = "benchmark.queryNumber";
+  public static final String QUERIES_NUM_PROPERTY_DEFAULT = "0";
+  public static final String QUERIES_PRINT_PROPERTY = "benchmark.queryPrint";
+  public static final String QUERIES_PRINT_PROPERTY_DEFAULT = "false";
   public static String queryClass;
+  public static int queryNumber;
+  public static boolean queryPrint;
   public static BenchQueries queries;
 
   @Override
   public void init(Properties p) throws WorkloadException {
     queryClass = p.getProperty(QUERIES_PROPERTY, QUERIES_PROPERTY_DEFAULT);
+    queryNumber = Integer.parseInt(p.getProperty(QUERIES_NUM_PROPERTY, QUERIES_NUM_PROPERTY_DEFAULT));
+    queryPrint = Boolean.parseBoolean(p.getProperty(QUERIES_PRINT_PROPERTY, QUERIES_PRINT_PROPERTY_DEFAULT));
 
     try {
       ClassLoader classLoader = RunDriver.class.getClassLoader();
@@ -34,16 +42,25 @@ public class RunDriver extends BenchWorkload {
 
   @Override
   public boolean test(BenchRun db, Object threadState) {
+    String[] queryList = queries.getQueryList();
     try {
-      for (String query : queries.getQueryList()) {
+      for (int i = 0; i < queryList.length; i++) {
+        if (queryNumber > 0 && i != queryNumber - 1) {
+          continue;
+        }
+        if (queryPrint) {
+          System.out.println(queryList[i]);
+          continue;
+        }
+        String query = queryList[i];
         List<ObjectNode> results = db.query(query);
         if (results == null) {
-          return false;
+          LOGGER.warn("No results found for query: {}", query);
+          continue;
         }
         for (ObjectNode result : results) {
           System.out.println(result.toPrettyString());
         }
-        return true;
       }
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
