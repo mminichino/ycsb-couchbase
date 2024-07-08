@@ -17,6 +17,7 @@
 
 package site.ycsb;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.htrace.core.TraceScope;
 import org.apache.htrace.core.Tracer;
 import site.ycsb.measurements.Measurements;
@@ -137,14 +138,20 @@ public class BenchRunWrapper extends BenchRun {
   /**
    * Execute benchmark query.
    */
-  public Status query(String statement) {
+  public List<ObjectNode> query(String statement) {
     try (final TraceScope span = tracer.newScope(scopeStringRead)) {
+      Status status;
       long ist = measurements.getIntendedStartTimeNs();
       long st = System.nanoTime();
-      Status res = db.query(statement);
+      List<ObjectNode> res = db.query(statement);
       long en = System.nanoTime();
-      measure("QUERY", res, ist, st, en);
-      measurements.reportStatus("QUERY", res);
+      if (res == null) {
+        status = Status.ERROR;
+      } else {
+        status = Status.OK;
+      }
+      measure("QUERY", status, ist, st, en);
+      measurements.reportStatus("QUERY", status);
       counter.incrementAndGet();
       return res;
     }

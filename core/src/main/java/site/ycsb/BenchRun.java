@@ -1,5 +1,7 @@
 package site.ycsb;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import java.util.*;
 
 /**
@@ -22,5 +24,5 @@ public abstract class BenchRun {
   public void cleanup() throws DBException {
   }
 
-  public abstract Status query(String statement);
+  public abstract List<ObjectNode> query(String statement);
 }

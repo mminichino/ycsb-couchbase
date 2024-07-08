@@ -25,6 +25,7 @@ import com.couchbase.client.java.manager.query.CollectionQueryIndexManager;
 import com.couchbase.client.java.manager.query.CreateQueryIndexOptions;
 import com.couchbase.client.java.query.QueryResult;
 import com.couchbase.client.java.query.QueryStatus;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.LoggerFactory;
 import site.ycsb.Record;
 import site.ycsb.*;
@@ -257,15 +258,16 @@ public class AnalyticsTPCRun extends BenchRun {
    * query records.
    */
   @Override
-  public Status query(String statement) {
+  public List<ObjectNode> query(String statement) {
+    TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
     try {
-      return retryBlock(() -> {
-        cluster.analyticsQuery(statement, analyticsOptions());
-        return Status.OK;
-      });
+      return retryBlock(() -> cluster.reactive().analyticsQuery(statement, analyticsOptions())
+          .flatMapMany(result -> result.rowsAs(typeRef))
+          .collectList()
+          .block());
     } catch (Throwable t) {
       LOGGER.error("query exception: {}", t.getMessage(), t);
-      return Status.ERROR;
+      return null;
     }
   }
 

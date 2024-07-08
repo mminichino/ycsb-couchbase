@@ -12,10 +12,13 @@ import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.java.Bucket;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.ClusterOptions;
+import com.couchbase.client.java.Scope;
 import com.couchbase.client.java.codec.RawJsonTranscoder;
 import com.couchbase.client.java.codec.Transcoder;
+import com.couchbase.client.java.codec.TypeRef;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.java.manager.collection.CollectionManager;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.LoggerFactory;
 import site.ycsb.BenchRun;
 import site.ycsb.ByteIterator;
@@ -26,6 +29,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -54,6 +58,7 @@ public class CouchbaseTPCRun extends BenchRun {
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Cluster cluster;
   private static volatile Bucket bucket;
+  private static volatile Scope scope;
   private static volatile CollectionManager collectionManager;
   private static volatile ClusterEnvironment environment;
   private static String bucketName;
@@ -161,6 +166,7 @@ public class CouchbaseTPCRun extends BenchRun {
           cluster = Cluster.connect(connectString,
               ClusterOptions.clusterOptions(username, password).environment(environment));
           bucket = cluster.bucket(bucketName);
+          scope = bucket.scope(scopeName);
           collectionManager = bucket.collections();
         }
       } catch(Exception e) {
@@ -219,27 +225,30 @@ public class CouchbaseTPCRun extends BenchRun {
     return block.call();
   }
 
-  public Status runAnalytics(String statement) {
+  public List<ObjectNode> runAnalytics(String statement) {
+    TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
     try {
-      return retryBlock(() -> {
-        cluster.analyticsQuery(statement, analyticsOptions());
-        return Status.OK;
-      });
+      return retryBlock(() -> scope.reactive().analyticsQuery(statement, analyticsOptions())
+          .flatMapMany(result -> result.rowsAs(typeRef))
+          .collectList()
+          .block());
     } catch (Throwable t) {
       LOGGER.error("query exception: {}", t.getMessage(), t);
-      return Status.ERROR;
+      return null;
     }
   }
 
-  public Status runQuery(String statement) {
+  public List<ObjectNode> runQuery(String statement) {
+    TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
     try {
-      return retryBlock(() -> {
-        cluster.query(statement, queryOptions());
-        return Status.OK;
-      });
+      return retryBlock(() -> scope.reactive().query(statement, queryOptions()
+              .clientContextId(bucketName + "." + scopeName))
+          .flatMapMany(result -> result.rowsAs(typeRef))
+          .collectList()
+          .block());
     } catch (Throwable t) {
       LOGGER.error("query exception: {}", t.getMessage(), t);
-      return Status.ERROR;
+      return null;
     }
   }
 
@@ -251,18 +260,16 @@ public class CouchbaseTPCRun extends BenchRun {
    * query records.
    */
   @Override
-  public Status query(String statement) {
+  public List<ObjectNode> query(String statement) {
     try {
       if (analyticsMode) {
         return runAnalytics(statement);
       } else {
         return runQuery(statement);
       }
-    } catch (DocumentNotFoundException e) {
-      return Status.NOT_FOUND;
     } catch (Throwable t) {
       LOGGER.error("read transaction exception: {}", t.getMessage(), t);
-      return Status.ERROR;
+      return null;
     }
   }
 
