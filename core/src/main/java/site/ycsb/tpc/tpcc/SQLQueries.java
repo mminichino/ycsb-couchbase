@@ -103,12 +103,12 @@ public class SQLQueries extends BenchQueries {
       "ORDER BY su.su_nationkey, cust_nation, l_year",
       // Q08
       "SELECT DATE_PART_STR(rn1coolis.o_entry_d, 'year') as l_year, " +
-      "ROUND((SUM(case when sun2.n_name = 'Germany' then rn1coolis.ol_amount else 0 end) / SUM(rn1coolis.ol_amount)),2) as mkt_share " +
+      "ROUND((SUM(case when sun2.n_name = 'GERMANY' then rn1coolis.ol_amount else 0 end) / SUM(rn1coolis.ol_amount)),2) as mkt_share " +
       "FROM " +
       "(SELECT rn1cooli.o_entry_d,  rn1cooli.ol_amount, s.s_w_id, s.s_i_id " +
       "FROM stock s JOIN " +
       "(SELECT o.o_entry_d, ol.ol_i_id, ol.ol_amount, ol.ol_supply_w_id " +
-      "FROM orders o, o.o_orderline ol, item i JOIN " +
+      "FROM orders o, order_line ol, item i JOIN " +
       "(SELECT c.c_id, c.c_w_id, c.c_d_id " +
       "FROM customer c JOIN " +
       "(SELECT n1.n_nationkey " +
@@ -118,7 +118,8 @@ public class SQLQueries extends BenchQueries {
       "ON cnr.c_id = o.o_c_id AND cnr.c_w_id = o.o_w_id AND cnr.c_d_id = o.o_d_id " +
       "AND i.i_data LIKE '%b' AND i.i_id = ol.ol_i_id " +
       "AND ol.ol_i_id < 1000 " +
-      "AND o.o_entry_d /*+ skip-index */ BETWEEN '2017-01-01 00:00:00.000000' AND '2018-12-31 00:00:00.000000') rn1cooli " +
+      "AND o.o_entry_d /*+ skip-index */ BETWEEN '2017-01-01 00:00:00.000000' AND '2018-12-31 00:00:00.000000' " +
+      "WHERE o.o_id = ol.ol_o_id) rn1cooli " +
       "ON rn1cooli.ol_i_id = s.s_i_id " +
       "AND rn1cooli.ol_supply_w_id = s.s_w_id) rn1coolis JOIN " +
       "(SELECT su.su_suppkey, n2.n_name " +
