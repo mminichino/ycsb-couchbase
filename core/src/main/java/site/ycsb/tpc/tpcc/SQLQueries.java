@@ -313,9 +313,9 @@ public class SQLQueries extends BenchQueries {
       "SELECT SUBSTR1(c.c_state,1,1) AS country, COUNT(*) AS numcust, SUM(c.c_balance) AS totacctbal " +
       "FROM customer c " +
       "WHERE SUBSTR1(c.c_phone,1,1) IN ['1','2','3','4','5','6','7'] " +
-      "AND c.c_balance > (SELECT VALUE AVG(c1.c_balance) " +
+      "AND c.c_balance >= (SELECT VALUE AVG(c1.c_balance) " +
       "FROM customer c1 " +
-      "WHERE c1.c_balance > 0.00 " +
+      "WHERE c1.c_balance < 0.00 " +
       "AND SUBSTR1(c1.c_phone,1,1) IN ['1','2','3','4','5','6','7'])[0] " +
       "AND NOT EXISTS (SELECT VALUE 1 " +
       "FROM orders o " +
