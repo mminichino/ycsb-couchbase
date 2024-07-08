@@ -11,7 +11,7 @@ public class SQLQueries extends BenchQueries {
       "AVG(ol.ol_quantity) as avg_qty ," +
       "AVG(ol.ol_amount) as avg_amount ," +
       "COUNT(*) as COUNT_order " +
-      "FROM     order_line ol " +
+      "FROM order_line ol " +
       "WHERE ol.ol_delivery_d > '2014-07-01 00:00:00' " +
       "GROUP BY ol.ol_number " +
       "ORDER BY ol.ol_number",
@@ -36,23 +36,23 @@ public class SQLQueries extends BenchQueries {
       "ORDER BY n.n_name, su.su_name, i.i_id limit 100",
       // Q03
       "WITH co as " +
-      "(SELECT o.o_id, o.o_w_id, o.o_d_id, o.o_entry_d, o.o_orderline " +
-      "FROM orders o, customer c " +
-      "WHERE  c.c_state LIKE 'A%' " +
+      "(SELECT o.o_id, o.o_w_id, o.o_d_id, o.o_entry_d, ol.ol_amount " +
+      "FROM orders o, customer c, order_line ol " +
+      "WHERE o.o_id = ol.ol_o_id AND c.c_state LIKE 'A%' " +
       "AND c.c_id = o.o_c_id AND c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id " +
-      "AND o.o_entry_d /*+ skip-index */ < '2017-03-15 00:00:00.000000') " +
-      "SELECT co.o_id, co.o_w_id, co.o_d_id, SUM(ol.ol_amount) as revenue, co.o_entry_d " +
-      "FROM   co, co.o_orderline ol, neworder no " +
+      "AND o.o_entry_d < '2017-03-15 00:00:00.000000') " +
+      "SELECT co.o_id, co.o_w_id, co.o_d_id, SUM(co.ol_amount) as revenue, co.o_entry_d " +
+      "FROM co, new_orders no " +
       "WHERE no.no_w_id = co.o_w_id AND no.no_d_id = co.o_d_id AND no.no_o_id = co.o_id " +
       "GROUP BY co.o_id, co.o_w_id, co.o_d_id, co.o_entry_d " +
       "ORDER BY revenue DESC, co.o_entry_d",
       // Q04
       "SELECT o.o_ol_cnt, COUNT(*) as order_COUNT " +
-      "FROM   orders o " +
-      "WHERE  o.o_entry_d >= '2015-07-01 00:00:00.000000' AND o.o_entry_d < '2015-10-01 00:00:00.000000' " +
-      "AND EXISTS (SELECT VALUE 1 " +
-      "FROM o.o_orderline ol " +
-      "WHERE ol.ol_delivery_d >= date_add_str(o.o_entry_d, 1, 'week')) " +
+      "FROM orders o, order_line ol " +
+      "WHERE o.o_id = ol.ol_o_id " +
+      "AND o.o_entry_d >= '2015-07-01 00:00:00.000000' " +
+      "AND o.o_entry_d < '2015-10-01 00:00:00.000000' " +
+      "AND ol.ol_delivery_d >= date_add_str(o.o_entry_d, 1, 'week') " +
       "GROUP BY o.o_ol_cnt " +
       "ORDER BY o.o_ol_cnt ",
       // Q05
