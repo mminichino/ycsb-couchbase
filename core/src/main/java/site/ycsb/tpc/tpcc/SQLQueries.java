@@ -134,8 +134,9 @@ public class SQLQueries extends BenchQueries {
       "(SELECT s.s_w_id, s.s_i_id, ooli.o_entry_d, ooli.ol_amount " +
       "FROM stock s JOIN " +
       "(SELECT ol.ol_i_id, ol.ol_supply_w_id, ol.ol_amount, o.o_entry_d " +
-      "FROM orders o,  o.o_orderline ol, item i " +
-      "WHERE  i.i_data LIKE '%bb' and ol.ol_i_id = i.i_id) ooli " +
+      "FROM orders o,  order_line ol, item i " +
+      "WHERE o.o_id = ol.ol_o_id " +
+      "AND  i.i_data LIKE '%bb' and ol.ol_i_id = i.i_id) ooli " +
       "ON ooli.ol_i_id = s.s_i_id and ooli.ol_supply_w_id = s.s_w_id) oolis JOIN " +
       "(SELECT su.su_suppkey, n.n_name " +
       "FROM supplier su, nation n " +
