@@ -91,7 +91,7 @@ public class SQLQueries extends BenchQueries {
       "FROM customer c JOIN " +
       "(SELECT n1.n_nationkey n1key, n2.n_nationkey n2key " +
       "FROM nation n1, nation n2 " +
-      "WHERE (n1.n_name = 'GERMANY' AND n2.n_name = 'CAMBODIA') OR (n1.n_name = 'CAMBODIA' AND n2.n_name = 'GERMANY') " +
+      "WHERE (n1.n_name = 'Germany' AND n2.n_name = 'Cambodia') OR (n1.n_name = 'Cambodia' AND n2.n_name = 'Germany') " +
       ")n1n2 " +
       "ON string_to_codepoint(c.c_state)[0] = n1n2.n2key) n1n2c " +
       "ON n1n2c.c_id = o.o_c_id AND n1n2c.c_w_id = o.o_w_id AND n1n2c.c_d_id = o.o_d_id " +
@@ -103,7 +103,7 @@ public class SQLQueries extends BenchQueries {
       "ORDER BY su.su_nationkey, cust_nation, l_year",
       // Q08
       "SELECT DATE_PART_STR(rn1coolis.o_entry_d, 'year') as l_year, " +
-      "ROUND((SUM(case when sun2.n_name = 'GERMANY' then rn1coolis.ol_amount else 0 end) / SUM(rn1coolis.ol_amount)),2) as mkt_share " +
+      "ROUND((SUM(case when sun2.n_name = 'Germany' then rn1coolis.ol_amount else 0 end) / SUM(rn1coolis.ol_amount)),2) as mkt_share " +
       "FROM " +
       "(SELECT rn1cooli.o_entry_d,  rn1cooli.ol_amount, s.s_w_id, s.s_i_id " +
       "FROM stock s JOIN " +

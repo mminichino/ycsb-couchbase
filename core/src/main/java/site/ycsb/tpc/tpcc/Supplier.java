@@ -9,10 +9,21 @@ import java.util.List;
 public class Supplier {
   private final ObjectNode data;
 
-  public Supplier(int su_suppkey, List<Integer> comments, List<Integer> complaints, TPCCUtil util) {
+  public Supplier(int su_suppkey, List<Integer> comments, List<Integer> complaints, int[] nationVector, TPCCUtil util) {
     String su_name = "Supplier#" + util.strLeadingZero(su_suppkey, 9);
     String su_address = util.makeRandomString(10, 40);
-    int su_nationkey = util.getNation(util.randomNumber(1, util.numNations())).id;
+
+    int su_nationkey;
+    while (true) {
+      int nationKey = util.getNation(util.randomNumber(1, util.numNations())).id;
+      int nationKeyIndex = util.nationIndex(nationKey);
+      if (nationVector[nationKeyIndex] <= 162) {
+        su_nationkey = nationKey;
+        nationVector[nationKeyIndex]++;
+        break;
+      }
+    }
+
     String su_phone = util.makeNumberString(16, 16);
     double su_acctbal = util.randomDouble(-999.99, 9999.99,2);
     String su_comment;

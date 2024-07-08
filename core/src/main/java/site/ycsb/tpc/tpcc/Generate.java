@@ -222,7 +222,7 @@ public class Generate {
     }
 
     for (int s_i_id = 1; s_i_id <= maxItems; s_i_id++) {
-      stock.add(new Stock(s_i_id, warehouseNum, util, orig));
+      stock.add(new Stock(s_i_id, warehouseNum, warehouseCount, util, orig));
     }
 
     LOGGER.debug("stock table data generation complete for warehouse {}", warehouseNum);
@@ -274,12 +274,14 @@ public class Generate {
 
   public void generateSuppliers() {
     LOGGER.debug("begin supplier data generation");
+    int[] nationVector = new int[util.numNations()];
+    Arrays.fill(nationVector, 0);
     List<List<Integer>> subsets = util.getRandomSets(supplierCount, 5);
     List<Integer> comments = subsets.get(0);
     List<Integer> complaints = subsets.get(1);
 
     for (int su_suppkey = 1; su_suppkey <= supplierCount; su_suppkey++) {
-      supplier.add(new Supplier(su_suppkey, comments, complaints, util));
+      supplier.add(new Supplier(su_suppkey, comments, complaints, nationVector, util));
     }
   }
 

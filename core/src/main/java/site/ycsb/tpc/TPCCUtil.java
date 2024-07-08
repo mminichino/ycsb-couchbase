@@ -25,27 +25,27 @@ public final class TPCCUtil {
   private int permCount;
   private int[] nums;
   private final NationData[] nations = {
-      new NationData(48, "ALGERIA", 0), new NationData(49, "ARGENTINA", 1), new NationData(50, "BRAZIL", 1),
-      new NationData(51, "CANADA", 1), new NationData(52, "EGYPT", 4), new NationData(53, "ETHIOPIA", 0),
-      new NationData(54, "FRANCE", 3), new NationData(55, "GERMANY", 3), new NationData(56, "INDIA", 2),
-      new NationData(57, "INDONESIA", 2), new NationData(65, "IRAN", 4), new NationData(66, "IRAQ", 4),
-      new NationData(67, "JAPAN", 2), new NationData(68, "JORDAN", 4), new NationData(69, "KENYA", 0),
-      new NationData(70, "MOROCCO", 0), new NationData(71, "MOZAMBIQUE", 0), new NationData(72, "PERU", 1),
-      new NationData(73, "CHINA", 2), new NationData(74, "ROMANIA", 3), new NationData(75, "SAUDI ARABIA", 4),
-      new NationData(76, "VIETNAM", 2), new NationData(77, "RUSSIA", 3), new NationData(78, "UNITED KINGDOM", 3),
-      new NationData(79, "UNITED STATES", 1), new NationData(80, "CHINA", 2), new NationData(81, "PAKISTAN", 2),
-      new NationData(82, "BANGLADESH", 2), new NationData(83, "MEXICO", 1), new NationData(84, "PHILIPPINES", 2),
-      new NationData(85, "THAILAND", 2), new NationData(86, "ITALY", 3), new NationData(87, "SOUTH AFRICA", 0),
-      new NationData(88, "SOUTH KOREA", 2), new NationData(89, "COLOMBIA", 1), new NationData(90, "SPAIN", 3),
-      new NationData(97, "UKRAINE", 3), new NationData(98, "POLAND", 3), new NationData(99, "SUDAN", 0),
-      new NationData(100, "UZBEKISTAN", 2), new NationData(101, "MALAYSIA", 2), new NationData(102, "VENEZUELA", 1),
-      new NationData(103, "NEPAL", 2), new NationData(104, "AFGHANISTAN", 2), new NationData(105, "NORTH KOREA", 2),
-      new NationData(106, "TAIWAN", 2), new NationData(107, "GHANA", 0), new NationData(108, "IVORY COAST", 0),
-      new NationData(109, "SYRIA", 4), new NationData(110, "MADAGASCAR", 0), new NationData(111, "CAMEROON", 0),
-      new NationData(112, "SRI LANKA", 2), new NationData(113, "ROMANIA", 3), new NationData(114, "NETHERLANDS", 3),
-      new NationData(115, "CAMBODIA", 2), new NationData(116, "BELGIUM", 3), new NationData(117, "GREECE", 3),
-      new NationData(118, "PORTUGAL", 3), new NationData(119, "ISRAEL", 4), new NationData(120, "FINLAND", 3),
-      new NationData(121, "SINGAPORE", 2), new NationData(122, "NORWAY", 3)
+      new NationData(48, "Algeria", 0), new NationData(49, "Argentina", 1), new NationData(50, "Brazil", 1),
+      new NationData(51, "Canada", 1), new NationData(52, "Egypt", 4), new NationData(53, "Ethiopia", 0),
+      new NationData(54, "France", 3), new NationData(55, "Germany", 3), new NationData(56, "India", 2),
+      new NationData(57, "Indonesia", 2), new NationData(65, "Iran", 4), new NationData(66, "Iraq", 4),
+      new NationData(67, "Japan", 2), new NationData(68, "Jordan", 4), new NationData(69, "Kenya", 0),
+      new NationData(70, "Morocco", 0), new NationData(71, "Mozambique", 0), new NationData(72, "Peru", 1),
+      new NationData(73, "China", 2), new NationData(74, "Romania", 3), new NationData(75, "Saudi Arabia", 4),
+      new NationData(76, "Vietnam", 2), new NationData(77, "Russia", 3), new NationData(78, "United Kingdom", 3),
+      new NationData(79, "United States", 1), new NationData(80, "China", 2), new NationData(81, "Pakistan", 2),
+      new NationData(82, "Bangladesh", 2), new NationData(83, "Mexico", 1), new NationData(84, "Philippines", 2),
+      new NationData(85, "Thailand", 2), new NationData(86, "Italy", 3), new NationData(87, "South Africa", 0),
+      new NationData(88, "South Korea", 2), new NationData(89, "Colombia", 1), new NationData(90, "Spain", 3),
+      new NationData(97, "Ukraine", 3), new NationData(98, "Poland", 3), new NationData(99, "Sudan", 0),
+      new NationData(100, "Uzbekistan", 2), new NationData(101, "Malaysia", 2), new NationData(102, "Venezuela", 1),
+      new NationData(103, "Nepal", 2), new NationData(104, "Afghanistan", 2), new NationData(105, "North Korea", 2),
+      new NationData(106, "Taiwan", 2), new NationData(107, "Ghana", 0), new NationData(108, "Ivory Coast", 0),
+      new NationData(109, "Syria", 4), new NationData(110, "Madagascar", 0), new NationData(111, "Cameroon", 0),
+      new NationData(112, "Sri Lanka", 2), new NationData(113, "Romania", 3), new NationData(114, "Netherlands", 3),
+      new NationData(115, "Cambodia", 2), new NationData(116, "Belgium", 3), new NationData(117, "Greece", 3),
+      new NationData(118, "Portugal", 3), new NationData(119, "Israel", 4), new NationData(120, "Finland", 3),
+      new NationData(121, "Singapore", 2), new NationData(122, "Norway", 3)
   };
   private final String[] regions = {"Africa", "America", "Asia", "Europe", "Middle East"};
   private final String[] tpchNouns = {
@@ -288,6 +288,13 @@ public final class TPCCUtil {
   
   public int numNations() {
     return nations.length;
+  }
+
+  public int nationIndex(int id) {
+    return IntStream.range(0, nations.length)
+        .filter(i -> id == nations[i].id)
+        .findFirst()
+        .orElse(-1);
   }
 
   public String getRegion(int id) {

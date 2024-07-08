@@ -7,7 +7,7 @@ import site.ycsb.tpc.TPCCUtil;
 public class Stock {
   private final ObjectNode data;
 
-  public Stock(int s_i_id, int s_w_id, TPCCUtil util, int[] orig) {
+  public Stock(int s_i_id, int s_w_id, int warehouseCount, TPCCUtil util, int[] orig) {
     int s_quantity = util.randomNumber(10, 100);
 
     String s_dist_01 = util.makeAlphaString(24, 24);
@@ -27,6 +27,15 @@ public class Stock {
       s_data = "original";
     }
 
+    int s_order_cnt = util.randomNumber(10, 3000);
+
+    int s_remote_cnt;
+    if (warehouseCount > 1) {
+      s_remote_cnt = (int) Math.round(s_order_cnt * 0.1);
+    } else {
+      s_remote_cnt = 0;
+    }
+
     ObjectMapper mapper = new ObjectMapper();
     this.data = mapper.createObjectNode();
     this.data.put("s_i_id", s_i_id);
@@ -43,8 +52,8 @@ public class Stock {
     this.data.put("s_dist_09", s_dist_09);
     this.data.put("s_dist_10", s_dist_10);
     this.data.put("s_ytd", 0);
-    this.data.put("s_order_cnt", 0);
-    this.data.put("s_remote_cnt", 0);
+    this.data.put("s_order_cnt", s_order_cnt);
+    this.data.put("s_remote_cnt", s_remote_cnt);
     this.data.put("s_data", s_data);
   }
 
