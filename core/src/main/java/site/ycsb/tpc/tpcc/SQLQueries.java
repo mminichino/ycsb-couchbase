@@ -146,8 +146,9 @@ public class SQLQueries extends BenchQueries {
       "ORDER BY sun.n_name, l_year DESC",
       // Q10
       "SELECT c.c_id, c.c_last, SUM(ol.ol_amount) as revenue, c.c_city, c.c_phone, n.n_name " +
-      "FROM nation n, customer c, orders o, o.o_orderline ol " +
-      "WHERE  c.c_id = o.o_c_id " +
+      "FROM nation n, customer c, orders o, order_line ol " +
+      "WHERE o.o_id = ol.ol_o_id " +
+      "AND  c.c_id = o.o_c_id " +
       "AND  c.c_w_id = o.o_w_id " +
       "AND  c.c_d_id = o.o_d_id " +
       "AND  o.o_entry_d >= '2015-10-01 00:00:00.000000' " +
