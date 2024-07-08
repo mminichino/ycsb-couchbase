@@ -237,30 +237,32 @@ public class SQLQueries extends BenchQueries {
       "AND ol.ol_quantity <= t.a",
       // Q18
       "SELECT c.c_last, c.c_id o_id, o.o_entry_d, o.o_ol_cnt, SUM(ol.ol_amount) " +
-      "FROM orders o, o.o_orderline ol, customer c " +
-      "WHERE  c.c_id = o.o_c_id AND  c.c_w_id = o.o_w_id AND  c.c_d_id = o.o_d_id " +
+      "FROM orders o, order_line ol, customer c " +
+      "WHERE o.o_id = ol.ol_o_id " +
+      "AND  c.c_id = o.o_c_id AND  c.c_w_id = o.o_w_id AND  c.c_d_id = o.o_d_id " +
       "GROUP BY o.o_id, o.o_w_id, o.o_d_id, c.c_id, c.c_last, o.o_entry_d, o.o_ol_cnt " +
       "HAVING SUM(ol.ol_amount) > 200 " +
       "ORDER BY SUM(ol.ol_amount) DESC, o.o_entry_d " +
       "LIMIT 100",
       // Q19
       "SELECT SUM(ol.ol_amount) AS revenue " +
-      "FROM orders o, o.o_orderline ol, item i " +
-      "WHERE  (( " +
+      "FROM orders o, order_line ol, item i " +
+      "WHERE o.o_id = ol.ol_o_id " +
+      "AND  (( " +
       "i.i_data LIKE '%h' " +
-      "AND ol.ol_quantity >= 7 AND ol.ol_quantity <= 17 " +
+      "AND ol.ol_quantity >= 5 AND ol.ol_quantity <= 17 " +
       "AND i.i_price between 1 AND 5 " +
-      "AND o.o_w_id IN [37, 29, 70] " +
+      "AND o.o_w_id IN [1, 29, 70] " +
       ") OR ( " +
       "i.i_data LIKE '%t' " +
       "AND ol.ol_quantity >= 16 AND ol.ol_quantity <= 26 " +
       "AND i.i_price between 1 AND 10 " +
-      "AND o.o_w_id IN [78, 17, 6] " +
+      "AND o.o_w_id IN [1, 17, 6] " +
       ") OR ( " +
       "i.i_data LIKE '%m' " +
       "AND ol.ol_quantity >= 24 AND ol.ol_quantity <= 34 " +
       "AND i.i_price between 1 AND 15 " +
-      "AND  o.o_w_id IN [91, 95, 15] " +
+      "AND  o.o_w_id IN [1, 95, 15] " +
       ")) " +
       "AND ol.ol_i_id = i.i_id " +
       "AND i.i_price between 1 AND 15",
