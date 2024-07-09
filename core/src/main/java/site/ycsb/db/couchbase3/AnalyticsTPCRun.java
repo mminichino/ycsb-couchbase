@@ -11,9 +11,7 @@ import com.couchbase.client.core.error.CollectionExistsException;
 import com.couchbase.client.core.error.DocumentNotFoundException;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.core.retry.FailFastRetryStrategy;
-import com.couchbase.client.java.Bucket;
-import com.couchbase.client.java.Cluster;
-import com.couchbase.client.java.ClusterOptions;
+import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
 import com.couchbase.client.java.codec.RawJsonTranscoder;
 import com.couchbase.client.java.codec.Transcoder;
@@ -61,6 +59,7 @@ public class AnalyticsTPCRun extends BenchRun {
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Cluster cluster;
   private static volatile Bucket bucket;
+  private static volatile Scope scope;
   private static volatile CollectionManager collectionManager;
   private static volatile ClusterEnvironment environment;
   private static String bucketName;
@@ -168,6 +167,7 @@ public class AnalyticsTPCRun extends BenchRun {
           cluster = Cluster.connect(connectString,
               ClusterOptions.clusterOptions(username, password).environment(environment));
           bucket = cluster.bucket(bucketName);
+          scope = bucket.scope(scopeName);
           collectionManager = bucket.collections();
         }
       } catch(Exception e) {
@@ -226,34 +226,6 @@ public class AnalyticsTPCRun extends BenchRun {
     return block.call();
   }
 
-  public Status runAnalytics(String statement) {
-    try {
-      return retryBlock(() -> {
-        cluster.analyticsQuery(statement, analyticsOptions());
-        return Status.OK;
-      });
-    } catch (Throwable t) {
-      LOGGER.error("query exception: {}", t.getMessage(), t);
-      return Status.ERROR;
-    }
-  }
-
-  public Status runQuery(String statement) {
-    try {
-      return retryBlock(() -> {
-        cluster.query(statement, queryOptions());
-        return Status.OK;
-      });
-    } catch (Throwable t) {
-      LOGGER.error("query exception: {}", t.getMessage(), t);
-      return Status.ERROR;
-    }
-  }
-
-  private String keyspace(String collection) {
-    return bucketName + "." + scopeName + "." + collection;
-  }
-
   /**
    * query records.
    */
@@ -261,7 +233,7 @@ public class AnalyticsTPCRun extends BenchRun {
   public List<ObjectNode> query(String statement) {
     TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
     try {
-      return retryBlock(() -> cluster.reactive().analyticsQuery(statement, analyticsOptions())
+      return retryBlock(() -> scope.reactive().analyticsQuery(statement, analyticsOptions())
           .flatMapMany(result -> result.rowsAs(typeRef))
           .collectList()
           .block());
@@ -269,19 +241,5 @@ public class AnalyticsTPCRun extends BenchRun {
       LOGGER.error("query exception: {}", t.getMessage(), t);
       return null;
     }
-  }
-
-  /**
-   * Helper method to turn the passed in iterator values into a map we can encode to json.
-   *
-   * @param values the values to encode.
-   * @return the map of encoded values.
-   */
-  private static Map<String, String> encode(final Map<String, ByteIterator> values) {
-    Map<String, String> result = new HashMap<>();
-    values.entrySet()
-        .parallelStream()
-        .forEach(entry -> result.put(entry.getKey(), entry.getValue().toString()));
-    return result;
   }
 }
