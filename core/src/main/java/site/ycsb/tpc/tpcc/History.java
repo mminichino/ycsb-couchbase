@@ -4,16 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import site.ycsb.tpc.TPCCUtil;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
 public class History {
   private final ObjectNode data;
 
   public History(int c_id, int c_d_id, int c_w_id, double h_amount, TPCCUtil util) {
-    String dateFormat = "yy-MM-dd'T'HH:mm:ss";
-    SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
-    String date = timeStampFormat.format(new Date());
+    String date = util.endDateText();
 
     String h_data = util.makeAlphaString(12, 24);
 
