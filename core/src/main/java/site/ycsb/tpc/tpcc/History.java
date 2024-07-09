@@ -10,12 +10,11 @@ import java.util.Date;
 public class History {
   private final ObjectNode data;
 
-  public History(int c_id, int c_d_id, int c_w_id, TPCCUtil util) {
+  public History(int c_id, int c_d_id, int c_w_id, double h_amount, TPCCUtil util) {
     String dateFormat = "yy-MM-dd'T'HH:mm:ss";
     SimpleDateFormat timeStampFormat = new SimpleDateFormat(dateFormat);
     String date = timeStampFormat.format(new Date());
 
-    double h_amount = 10.0;
     String h_data = util.makeAlphaString(12, 24);
 
     ObjectMapper mapper = new ObjectMapper();

@@ -79,7 +79,7 @@ public class SQLQueries extends BenchQueries {
       "FROM   order_line ol " +
       "WHERE  ol.ol_delivery_d >= '2016-01-01 00:00:00.000000' " +
       "AND  ol.ol_delivery_d < '2017-01-01 00:00:00.000000' " +
-      "AND  ol.ol_amount > 60",
+      "AND  ol.ol_amount > 600",
       // Q07
       "SELECT su.su_nationkey as supp_nation, SUBSTR1(n1n2cools.c_state,1,1) as cust_nation, DATE_PART_STR(n1n2cools.o_entry_d, 'year') as l_year, ROUND(SUM(n1n2cools.ol_amount),2) as revenue " +
       "FROM " +
@@ -250,7 +250,7 @@ public class SQLQueries extends BenchQueries {
       "WHERE o.o_id = ol.ol_o_id " +
       "AND  (( " +
       "i.i_data LIKE '%h' " +
-      "AND ol.ol_quantity >= 5 AND ol.ol_quantity <= 17 " +
+      "AND ol.ol_quantity >= 7 AND ol.ol_quantity <= 17 " +
       "AND i.i_price between 1 AND 5 " +
       "AND o.o_w_id IN [1, 29, 70] " +
       ") OR ( " +
@@ -313,9 +313,9 @@ public class SQLQueries extends BenchQueries {
       "SELECT SUBSTR1(c.c_state,1,1) AS country, COUNT(*) AS numcust, SUM(c.c_balance) AS totacctbal " +
       "FROM customer c " +
       "WHERE SUBSTR1(c.c_phone,1,1) IN ['1','2','3','4','5','6','7'] " +
-      "AND c.c_balance >= (SELECT VALUE AVG(c1.c_balance) " +
+      "AND c.c_balance > (SELECT VALUE AVG(c1.c_balance) " +
       "FROM customer c1 " +
-      "WHERE c1.c_balance < 0.00 " +
+      "WHERE c1.c_balance > 0.00 " +
       "AND SUBSTR1(c1.c_phone,1,1) IN ['1','2','3','4','5','6','7'])[0] " +
       "AND NOT EXISTS (SELECT VALUE 1 " +
       "FROM orders o " +

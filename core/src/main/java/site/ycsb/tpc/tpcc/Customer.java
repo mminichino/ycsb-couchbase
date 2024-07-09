@@ -7,7 +7,7 @@ import site.ycsb.tpc.TPCCUtil;
 public class Customer {
   private final ObjectNode data;
 
-  public Customer(int c_id, int c_d_id, int c_w_id, TPCCUtil util) {
+  public Customer(int c_id, int c_d_id, int c_w_id, double c_balance, TPCCUtil util) {
     String c_first = util.makeAlphaString(8, 16);
     String c_middle = "O" + "E";
 
@@ -35,7 +35,9 @@ public class Customer {
 
     int c_credit_lim = 50000;
     float c_discount = (float) (((float) util.randomNumber(0, 50)) / 100.0);
-    float c_balance = (float) -10.0;
+
+    double c_ytd_payment = 10.0;
+    c_balance = c_balance - c_ytd_payment;
 
     String c_data = util.makeAlphaString(300, 500);
     String date = util.startDateText();
@@ -59,7 +61,7 @@ public class Customer {
     this.data.put("c_credit_lim", c_credit_lim);
     this.data.put("c_discount", c_discount);
     this.data.put("c_balance", c_balance);
-    this.data.put("c_ytd_payment", 10.0);
+    this.data.put("c_ytd_payment", c_ytd_payment);
     this.data.put("c_payment_cnt", 1);
     this.data.put("c_delivery_cnt", 0);
     this.data.put("c_data", c_data);

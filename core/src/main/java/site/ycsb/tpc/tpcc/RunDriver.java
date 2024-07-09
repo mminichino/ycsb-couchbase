@@ -58,8 +58,10 @@ public class RunDriver extends BenchWorkload {
           LOGGER.warn("No results found for query: {}", query);
           continue;
         }
+        System.out.printf("Query %d returned %d results\n", i + 1, results.size());
+        LOGGER.info("Query #{}", i + 1);
         for (ObjectNode result : results) {
-          System.out.println(result.toPrettyString());
+          LOGGER.info("\n{}", result.toPrettyString());
         }
       }
     } catch (Exception e) {

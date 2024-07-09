@@ -6,18 +6,19 @@ import site.ycsb.tpc.TPCCUtil;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Map;
 
 public class OrderLine {
   private final ObjectNode data;
 
-  public OrderLine(int ol, int o_id, int o_d_id, int o_w_id, Date orderDate, int maxItems, TPCCUtil util) {
+  public OrderLine(int ol, int o_id, int o_c_id, int o_d_id, int o_w_id, Date orderDate, int maxItems, Map<Integer, Double> customerTotalMap, TPCCUtil util) {
     int ol_i_id = util.randomNumber(1, maxItems);
-    int ol_quantity = 5;
-    float ol_amount = (float) 0.0;
+    int ol_quantity = util.randomNumber(5, 15);
+    Double ol_amount = 0.0;
 
     String ol_dist_info = util.makeAlphaString(24, 24);
 
-    float tmp_float = (float) ((float) (util.randomNumber(10, 10000)) / 100.0);
+    Double tmp_float = (double) util.randomNumber(10, 10000);
 
     Date startDate = util.addDays(2, orderDate);
     Date endDate = util.addDays(151, orderDate);
@@ -34,9 +35,11 @@ public class OrderLine {
     if (o_id > 2100) {
       this.data.putNull("ol_delivery_d");
       this.data.put("ol_amount", ol_amount);
+      customerTotalMap.merge(o_c_id, ol_amount, Double::sum);
     } else {
       this.data.put("ol_delivery_d", date);
       this.data.put("ol_amount", tmp_float);
+      customerTotalMap.merge(o_c_id, tmp_float, Double::sum);
     }
     this.data.put("ol_quantity", ol_quantity);
     this.data.put("ol_dist_info", ol_dist_info);

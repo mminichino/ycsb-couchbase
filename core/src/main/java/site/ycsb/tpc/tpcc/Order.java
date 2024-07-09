@@ -6,11 +6,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import site.ycsb.tpc.TPCCUtil;
 
 import java.util.Date;
+import java.util.Map;
 
 public class Order {
   private final ObjectNode data;
 
-  public Order(int o_id, int o_d_id, int o_w_id, Date orderDate, int o_ol_cnt, int maxItems, boolean separate, TPCCUtil util) {
+  public Order(int o_id, int o_d_id, int o_w_id, Date orderDate, int o_ol_cnt, int maxItems, Map<Integer, Double> customerTotalMap, boolean separate, TPCCUtil util) {
     int o_c_id = util.getPermutation();
     int o_carrier_id = util.randomNumber(1, 10);
 
@@ -37,12 +38,12 @@ public class Order {
         ObjectNode ol_entry = mapper.createObjectNode();
 
         int ol_i_id = util.randomNumber(1, maxItems);
-        int ol_quantity = 5;
-        float ol_amount = (float) 0.0;
+        int ol_quantity = util.randomNumber(5, 15);;
+        Double ol_amount = 0.0;
 
         String ol_dist_info = util.makeAlphaString(24, 24);
 
-        float tmp_float = (float) ((float) (util.randomNumber(10, 10000)) / 100.0);
+        Double tmp_float = (double) util.randomNumber(10, 10000);
 
         Date startDate = util.addDays(2, orderDate);
         Date endDate = util.addDays(151, orderDate);
@@ -57,9 +58,11 @@ public class Order {
         if (o_id > 2100) {
           ol_entry.putNull("ol_delivery_d");
           ol_entry.put("ol_amount", ol_amount);
+          customerTotalMap.merge(o_c_id, ol_amount, Double::sum);
         } else {
           ol_entry.put("ol_delivery_d", olData);
           ol_entry.put("ol_amount", tmp_float);
+          customerTotalMap.merge(o_c_id, tmp_float, Double::sum);
         }
         ol_entry.put("ol_quantity", ol_quantity);
         ol_entry.put("ol_dist_info", ol_dist_info);
@@ -88,6 +91,10 @@ public class Order {
 
   public int o_entry_d() {
     return data.get("o_entry_d").asInt();
+  }
+
+  public ArrayNode o_orderline() {
+    return (ArrayNode) data.get("o_orderline");
   }
 
   public ObjectNode asNode() {

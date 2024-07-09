@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Logger;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Generate {
@@ -35,6 +36,8 @@ public class Generate {
   public List<Supplier> supplier = new ArrayList<>();
   public List<Nation> nation = new ArrayList<>();
   public List<Region> region = new ArrayList<>();
+
+  public Map<Integer, Double> customerTotalMap = new HashMap<>();
 
   public static class GeneratorBuilder {
     private int maxItems = 100000;
@@ -233,8 +236,8 @@ public class Generate {
 
     for (int d_id = 1; d_id <= distPerWarehouse; d_id++) {
       district.add(new District(d_id, warehouseNum, util));
-      generateCustomers(warehouseNum, d_id);
       generateOrders(warehouseNum, d_id);
+      generateCustomers(warehouseNum, d_id);
     }
 
     LOGGER.debug("district table data generation complete for warehouse {}", warehouseNum);
@@ -244,8 +247,9 @@ public class Generate {
     LOGGER.debug("begin customer data generation for warehouse {}", warehouseNum);
 
     for (int c_id = 1; c_id <= custPerDist; c_id++) {
-      customer.add(new Customer(c_id, districtNum, warehouseNum, util));
-      history.add(new History(c_id, districtNum, warehouseNum, util));
+      double orderTotal = customerTotalMap.getOrDefault(c_id, 0.0);
+      customer.add(new Customer(c_id, districtNum, warehouseNum, orderTotal, util));
+      history.add(new History(c_id, districtNum, warehouseNum, orderTotal, util));
     }
 
     LOGGER.debug("customer table data generation complete for warehouse {}", warehouseNum);
@@ -258,13 +262,15 @@ public class Generate {
     for (int o_id = 1; o_id <= ordPerDist; o_id++) {
       int o_ol_cnt = util.randomNumber(5, 15);
       Date orderDate = util.randomDate();
-      orders.add(new Order(o_id, districtNum, warehouseNum, orderDate, o_ol_cnt, maxItems, separateOrderLine, util));
+      Order order = new Order(o_id, districtNum, warehouseNum, orderDate, o_ol_cnt, maxItems, customerTotalMap, separateOrderLine, util);
+      int o_c_id = order.o_c_id();
+      orders.add(order);
       if (o_id > 2100) {
         newOrders.add(new NewOrder(o_id, districtNum, warehouseNum));
       }
       if (separateOrderLine) {
         for (int ol = 1; ol <= o_ol_cnt; ol++) {
-          orderLine.add(new OrderLine(ol, o_id, districtNum, warehouseNum, orderDate, maxItems, util));
+          orderLine.add(new OrderLine(ol, o_id, o_c_id, districtNum, warehouseNum, orderDate, maxItems, customerTotalMap, util));
         }
       }
     }
