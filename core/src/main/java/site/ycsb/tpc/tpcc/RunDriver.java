@@ -96,7 +96,7 @@ public class RunDriver extends BenchWorkload {
   public boolean run(BenchRun db, Object threadState) {
     int next = getNextQuery();
     int queryNum = queryVector[next];
-    String query = queries.getQueryList()[queryNum];
+    String query = queries.getQueryList()[queryNum - 1];
 
     if (debug) {
       LOGGER.debug("Thread {}: Query #{}: {}", getThreadId(), queryNum, query);
