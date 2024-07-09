@@ -20,6 +20,7 @@ public abstract class BenchWorkload {
   private final List<Future<Status>> tasks = new ArrayList<>();
   private ExecutorService executor = Executors.newFixedThreadPool(32);
   private boolean debug = false;
+  private int threadId;
 
   /**
    * Initialize the scenario. Create any generators and other shared objects here.
@@ -51,7 +52,12 @@ public abstract class BenchWorkload {
    * traces from a file, return true when there are more to do, false when you are done.
    */
   public boolean initThread(Properties p, int threadId, int threadCount) throws WorkloadException {
+    this.threadId = threadId;
     return true;
+  }
+
+  public int getThreadId() {
+    return threadId;
   }
 
   /**
