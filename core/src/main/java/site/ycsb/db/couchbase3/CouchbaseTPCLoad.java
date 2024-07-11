@@ -35,6 +35,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.ExecutionException;
@@ -81,7 +82,9 @@ public class CouchbaseTPCLoad extends LoadDriver {
   private boolean defaultScope;
   private static final AtomicLong recordNumber = new AtomicLong(0);
   private final List<Future<MutationResult>> tasks = new ArrayList<>();
-  private ExecutorService executor = Executors.newFixedThreadPool(32);
+  private final List<Throwable> errors = new ArrayList<>();
+  private final ExecutorService executor = Executors.newCachedThreadPool();
+  private static final AtomicBoolean runStop = new AtomicBoolean(false);
   private boolean analyticsMode;
   private boolean debug;
 
@@ -172,6 +175,21 @@ public class CouchbaseTPCLoad extends LoadDriver {
     }
 
     OPEN_CLIENTS.incrementAndGet();
+
+    Runnable r = () -> {
+      while(!runStop.get()) {
+        if (!errors.isEmpty()) {
+          Throwable error = errors.remove(0);
+          LOGGER.error(error.getMessage(), error);
+        }
+        try {
+          Thread.sleep(200L);
+        } catch (InterruptedException e) {
+          LOGGER.debug("Interrupted", e);
+        }
+      }
+    };
+    executor.submit(r);
   }
 
   private void logError(Exception error, String connectString) {
@@ -183,6 +201,12 @@ public class CouchbaseTPCLoad extends LoadDriver {
 
   @Override
   public synchronized void cleanup() {
+    if (!errors.isEmpty()) {
+      Throwable error = errors.remove(0);
+      LOGGER.error(error.getMessage(), error);
+    }
+    runStop.set(true);
+    executor.shutdown();
   }
 
   private static <T>T retryBlock(Callable<T> block) throws Exception {
@@ -207,27 +231,6 @@ public class CouchbaseTPCLoad extends LoadDriver {
       }
     }
     return block.call();
-  }
-
-  public void taskAdd(Callable<MutationResult> task) {
-    tasks.add(executor.submit(task));
-  }
-
-  public boolean taskWait() {
-    boolean status = true;
-    for (Future<MutationResult> future : tasks) {
-      try {
-        MutationResult result = future.get();
-        if (debug) {
-          LOGGER.debug("Task status: {}", result);
-        }
-      } catch (InterruptedException | ExecutionException e) {
-        LOGGER.error(e.getMessage(), e);
-        status = false;
-      }
-    }
-    tasks.clear();
-    return status;
   }
 
   public void createFieldIndex(String collectionName, String field) {
@@ -408,12 +411,20 @@ public class CouchbaseTPCLoad extends LoadDriver {
     }
   }
 
-  public MutationResult insert(Collection collection, String id, ObjectNode record) {
+  public void insert(Collection collection, String id, ObjectNode record) {
     try {
-    return retryBlock(() -> collection.upsert(id, record, upsertOptions().timeout(Duration.ofSeconds(10))));
+      collection.reactive().upsert(id, record, upsertOptions().timeout(Duration.ofSeconds(15)))
+          .subscribe(
+              next ->
+              {},
+              error ->
+              {
+                LOGGER.debug(error.getMessage(), error);
+                errors.add(error);
+              }
+          );
     } catch (Throwable t) {
       LOGGER.error("insert transaction exception: {}", t.getMessage(), t);
-      return null;
     }
   }
 
@@ -428,9 +439,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (Item i : batch) {
       ObjectNode record = i.asNode();
       String id = itemTable.getDocumentId(record);
-      taskAdd(() -> insert(itemCollection, id, record));
+      insert(itemCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -444,9 +454,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (Warehouse i : batch) {
       ObjectNode record = i.asNode();
       String id = warehouseTable.getDocumentId(record);
-      taskAdd(() -> insert(warehouseCollection, id, record));
+      insert(warehouseCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -460,9 +469,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (Stock i : batch) {
       ObjectNode record = i.asNode();
       String id = stockTable.getDocumentId(record);
-      taskAdd(() -> insert(stockCollection, id, record));
+      insert(stockCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -476,9 +484,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (District i : batch) {
       ObjectNode record = i.asNode();
       String id = districtTable.getDocumentId(record);
-      taskAdd(() -> insert(districtCollection, id, record));
+      insert(districtCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -492,9 +499,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (Customer i : batch) {
       ObjectNode record = i.asNode();
       String id = customerTable.getDocumentId(record);
-      taskAdd(() -> insert(customerCollection, id, record));
+      insert(customerCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -508,9 +514,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (History i : batch) {
       ObjectNode record = i.asNode();
       String id = historyTable.getDocumentId(record);
-      taskAdd(() -> insert(historyCollection, id, record));
+      insert(historyCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -524,9 +529,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (Order i : batch) {
       ObjectNode record = i.asNode();
       String id = orderTable.getDocumentId(record);
-      taskAdd(() -> insert(orderCollection, id, record));
+      insert(orderCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -540,9 +544,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (NewOrder i : batch) {
       ObjectNode record = i.asNode();
       String id = newOrderTable.getDocumentId(record);
-      taskAdd(() -> insert(newOrderCollection, id, record));
+      insert(newOrderCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -556,9 +559,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (OrderLine i : batch) {
       ObjectNode record = i.asNode();
       String id = orderLineTable.getDocumentId(record);
-      taskAdd(() -> insert(orderLineCollection, id, record));
+      insert(orderLineCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -572,9 +574,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (Supplier i : batch) {
       ObjectNode record = i.asNode();
       String id = supplierTable.getDocumentId(record);
-      taskAdd(() -> insert(supplierCollection, id, record));
+      insert(supplierCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -588,9 +589,8 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (Nation i : batch) {
       ObjectNode record = i.asNode();
       String id = nationTable.getDocumentId(record);
-      taskAdd(() -> insert(nationCollection, id, record));
+      insert(nationCollection, id, record);
     }
-    taskWait();
   }
 
   @Override
@@ -604,8 +604,7 @@ public class CouchbaseTPCLoad extends LoadDriver {
     for (Region i : batch) {
       ObjectNode record = i.asNode();
       String id = regionTable.getDocumentId(record);
-      taskAdd(() -> insert(regionCollection, id, record));
+      insert(regionCollection, id, record);
     }
-    taskWait();
   }
 }

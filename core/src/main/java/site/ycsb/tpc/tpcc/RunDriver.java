@@ -81,14 +81,18 @@ public class RunDriver extends BenchWorkload {
           continue;
         }
 
+        long start = System.nanoTime();
         List<ObjectNode> results = db.query(query, i + 1);
+        long end = System.nanoTime();
+        long elapsedTimeNano = end - start;
+        double elapsedTime = (double) elapsedTimeNano / 1_000_000_000;
 
         if (results == null) {
           LOGGER.warn("No results found for query: {}", query);
           continue;
         }
 
-        System.out.printf("Query %d returned %d results\n", i + 1, results.size());
+        System.out.printf("Query %d returned %d results in %.4f seconds\n", i + 1, results.size(), elapsedTime);
 
         LOGGER.info("Query #{}", i + 1);
         for (ObjectNode result : results) {
