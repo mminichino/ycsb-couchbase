@@ -20,6 +20,10 @@ public class RunDriver extends BenchWorkload {
   public static final String QUERIES_NUM_PROPERTY_DEFAULT = "0";
   public static final String QUERIES_PRINT_PROPERTY = "benchmark.queryPrint";
   public static final String QUERIES_PRINT_PROPERTY_DEFAULT = "false";
+  public static final String BENCHMARK_PROPERTY = "bench.benchmark";
+  public static final String BENCHMARK_PROPERTY_DEFAULT = "ch2";
+  public static final String QUERY_GROUP_PROPERTY = "bench.benchQueryGroup";
+  public static final String QUERY_GROUP_PROPERTY_DEFAULT = "analytics";
   private static final Object CYCLE_COORDINATOR = new Object();
   private static final AtomicLong opCounter = new AtomicLong(0);
   public static Queries queries;
@@ -34,13 +38,15 @@ public class RunDriver extends BenchWorkload {
     queryClass = p.getProperty(QUERIES_PROPERTY, QUERIES_PROPERTY_DEFAULT);
     queryNumber = Integer.parseInt(p.getProperty(QUERIES_NUM_PROPERTY, QUERIES_NUM_PROPERTY_DEFAULT));
     queryPrint = Boolean.parseBoolean(p.getProperty(QUERIES_PRINT_PROPERTY, QUERIES_PRINT_PROPERTY_DEFAULT));
+    String benchmark = p.getProperty(BENCHMARK_PROPERTY, BENCHMARK_PROPERTY_DEFAULT);
+    String queryGroup = p.getProperty(QUERY_GROUP_PROPERTY, QUERY_GROUP_PROPERTY_DEFAULT);
 
     if (debug) {
       LOGGER.setLevel(Level.DEBUG);
     }
 
     try {
-      queries = new Queries("ch2", "analytics");
+      queries = new Queries(benchmark, queryGroup);
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
       throw new WorkloadException(e);

@@ -1,0 +1,4 @@
+SELECT i_id
+FROM item
+WHERE i_id > 300
+LIMIT 30
