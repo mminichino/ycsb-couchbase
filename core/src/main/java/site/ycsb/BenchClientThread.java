@@ -96,7 +96,7 @@ public class BenchClientThread implements Runnable {
 
   @Override
   public void run() {
-    LOGGER.info("Starting thread {}", threadID);
+    LOGGER.debug("Starting thread {}", threadID);
     try {
       db.init();
     } catch (DBException e) {

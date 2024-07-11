@@ -27,7 +27,7 @@ public class RunDriver extends BenchWorkload {
   public static int queryNumber;
   public static boolean queryPrint;
   public static List<Integer> queryVector;
-  public static boolean debug = true;
+  public static boolean debug = false;
 
   @Override
   public void init(Properties p) throws WorkloadException {
