@@ -95,6 +95,7 @@ public final class CouchbaseConnect {
   private final boolean scopeEnabled;
   private final boolean collectionEnabled;
   private boolean analyticsEnabled;
+  private boolean columnar;
   private final DurabilityLevel durability;
   private final int ttlSeconds;
   private boolean communityEdition = false;
@@ -112,6 +113,7 @@ public final class CouchbaseConnect {
     private String bucketName;
     private String scopeName = DEFAULT_SCOPE;
     private String collectionName = DEFAULT_COLLECTION;
+    private boolean columnar = false;
     private int ttlSeconds = 0;
     private DurabilityLevel durabilityLevel = DurabilityLevel.NONE;
 
@@ -185,6 +187,11 @@ public final class CouchbaseConnect {
       return this;
     }
 
+    public CouchbaseBuilder columnar(final boolean columnar) {
+      this.columnar = columnar;
+      return this;
+    }
+
     public CouchbaseBuilder keyspace(final String bucket, final String scope, final String collection) {
       this.bucketName = bucket;
       this.scopeName = scope;
@@ -209,6 +216,7 @@ public final class CouchbaseConnect {
     bucketName = builder.bucketName;
     scopeName = builder.scopeName;
     collectionName = builder.collectionName;
+    columnar = builder.columnar;
     scopeEnabled = !Objects.equals(scopeName, "_default");
     collectionEnabled = !Objects.equals(collectionName, "_default");
     analyticsEnabled = false;
@@ -257,14 +265,17 @@ public final class CouchbaseConnect {
           cluster = Cluster.connect(connectString,
               ClusterOptions.clusterOptions(username, password).environment(environment));
           cluster.waitUntilReady(Duration.ofSeconds(15));
-          bucketMgr = cluster.buckets();
-          try {
-            if (bucketName != null) {
-              bucketMgr.getBucket(bucketName);
-              bucket = cluster.bucket(bucketName);
+          if (!columnar) {
+            bucketMgr = cluster.buckets();
+            try {
+              if (bucketName != null) {
+                bucketMgr.getBucket(bucketName);
+                bucket = cluster.bucket(bucketName);
+              }
+            } catch (BucketNotFoundException ignored) {
             }
-          } catch (BucketNotFoundException ignored) { }
-          getClusterInfo();
+            getClusterInfo();
+          }
         }
       } catch(Exception e) {
         logError(e, connectString);
@@ -674,6 +685,19 @@ public final class CouchbaseConnect {
     Bucket bucket = cluster.bucket(bucketName);
     Scope scope = bucket.scope(scopeName);
     try {
+      AnalyticsResult result = cluster.analyticsQuery(statement, analyticsOptions());
+      return result.rowsAs(typeRef);
+    } catch (Throwable t) {
+      LOGGER.error("analytics query exception: {}", t.getMessage(), t);
+      return null;
+    }
+  }
+
+  public List<ObjectNode> analyticsScopeQuery(String statement) {
+    TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
+    Bucket bucket = cluster.bucket(bucketName);
+    Scope scope = bucket.scope(scopeName);
+    try {
       AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions());
       return result.rowsAs(typeRef);
     } catch (Throwable t) {
@@ -682,7 +706,7 @@ public final class CouchbaseConnect {
     }
   }
 
-  public List<ObjectNode> analyticsQuery(String statement, List<String> parameters) {
+  public List<ObjectNode> analyticsScopeQuery(String statement, List<String> parameters) {
     TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
     Bucket bucket = cluster.bucket(bucketName);
     Scope scope = bucket.scope(scopeName);

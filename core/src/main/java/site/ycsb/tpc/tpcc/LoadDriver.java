@@ -162,6 +162,10 @@ public abstract class LoadDriver extends BenchLoad {
     createNationTable();
     createRegionTable();
 
+    if (schemaOnly) {
+      return;
+    }
+
     LOGGER.info("Beginning data generation phase");
 
     for (int warehouse = 1; warehouse <= warehouseCount; warehouse++) {
@@ -174,10 +178,6 @@ public abstract class LoadDriver extends BenchLoad {
         insertSupplier();
         insertNation();
         insertRegion();
-      }
-
-      if (schemaOnly) {
-        return;
       }
 
       System.out.printf("Loading warehouse %d tables\n", warehouse);

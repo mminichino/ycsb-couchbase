@@ -325,9 +325,6 @@ public class CouchbaseTPCLoad extends LoadDriver {
       if (analyticsMode) {
         createAnalyticsCollection(name);
       }
-      for (String field : indexFields) {
-        createFieldIndex(bucket, scopeName, name, field);
-      }
     } catch (CollectionExistsException e) {
       LOGGER.debug("Collection {} already exists", name);
     } catch (Throwable t) {
