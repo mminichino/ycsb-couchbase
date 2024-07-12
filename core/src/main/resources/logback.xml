@@ -70,6 +70,10 @@
     <appender-ref ref="FILE"/>
   </logger>
 
+  <logger name="site.ycsb.db.couchbase3.CouchbaseStream" level="INFO" additivity="false">
+    <appender-ref ref="FILE"/>
+  </logger>
+
   <logger name="site.ycsb.tpc.tpcc.Generate" level="INFO" additivity="false">
     <appender-ref ref="FILE"/>
   </logger>
