@@ -55,7 +55,8 @@ public abstract class LoadDriver extends BenchLoad {
   private static boolean separateOrderLine;
   private static boolean enableDebug = false;
   private static int warehouseCount;
-  private static boolean schemaOnly;
+  private static boolean schemaOnly = false;
+  private static int batchSize;
 
   private Properties properties = new Properties();
   private Generate generator;
@@ -73,6 +74,7 @@ public abstract class LoadDriver extends BenchLoad {
     ordPerDist = Integer.parseInt(p.getProperty("bench.ordPerDist", "3000"));
     warehouseCount = Integer.parseInt(p.getProperty("bench.warehouseCount", "1"));
     separateOrderLine = Boolean.parseBoolean(p.getProperty("bench.separateOrderLine", "true"));
+    batchSize = Integer.parseInt(p.getProperty("bench.batchSize", "1000"));
     schemaOnly = properties.getProperty("bench.schemaOnly", "false").equals("true");
     enableDebug = properties.getProperty("bench.debug", "false").equals("true");
   }
@@ -112,6 +114,7 @@ public abstract class LoadDriver extends BenchLoad {
         .maxItems(maxItems)
         .separateOrderLine(separateOrderLine)
         .enableDebug(enableDebug)
+        .batchSize(batchSize)
         .build();
     generator.createSchema();
   }
@@ -161,7 +164,7 @@ public abstract class LoadDriver extends BenchLoad {
 
     LOGGER.info("Beginning data generation phase");
 
-    for (int warehouse = 1; warehouse < warehouseCount; warehouse++) {
+    for (int warehouse = 1; warehouse <= warehouseCount; warehouse++) {
       System.out.printf("Generating warehouse %d data\n", warehouse);
       generate(warehouse);
 

@@ -74,6 +74,10 @@
     <appender-ref ref="FILE"/>
   </logger>
 
+  <logger name="site.ycsb.tpc.tpcc.LoadDriver" level="INFO" additivity="false">
+    <appender-ref ref="FILE"/>
+  </logger>
+
   <logger name="site.ycsb.tpc.tpcc.RunDriver" level="INFO" additivity="false">
     <appender-ref ref="FILE"/>
   </logger>
