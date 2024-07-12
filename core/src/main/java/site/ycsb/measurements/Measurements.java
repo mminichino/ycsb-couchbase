@@ -270,15 +270,9 @@ public class Measurements {
   public synchronized String getSummary() {
     String ret = "";
     for (OneMeasurement m : opToMesurementMap.values()) {
-      if (m.getName().indexOf('_') < 0) {
-        continue;
-      }
       ret += m.getSummary() + " ";
     }
     for (OneMeasurement m : opToIntendedMesurementMap.values()) {
-      if (m.getName().indexOf('_') < 0) {
-        continue;
-      }
       ret += m.getSummary() + " ";
     }
     return ret;

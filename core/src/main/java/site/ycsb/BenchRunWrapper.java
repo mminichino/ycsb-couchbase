@@ -150,9 +150,8 @@ public class BenchRunWrapper extends BenchRun {
       } else {
         status = Status.OK;
       }
-      measure("QUERY_OVERALL", status, ist, st, en);
       measure("QUERY_" + number, status, ist, st, en);
-      measurements.reportStatus("QUERY", status);
+      measurements.reportStatus("QUERY_" + number, status);
       counter.incrementAndGet();
       return res;
     }
