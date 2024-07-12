@@ -45,7 +45,7 @@ fi
 
 if [ $RUN_MODE -eq 1 ]; then
   for THREADCOUNT_RUN in 1 3 8; do
-    RUN_OPTS="-db $RUN_DRIVER -P workloads/workload_ch2 -threads $THREADCOUNT_RUN -p operationcount=0 -p maxexecutiontime=$RUNTIME -manual -s -t"
+    RUN_OPTS="-db $RUN_DRIVER -P workloads/workload_ch2_${THREADCOUNT_RUN} -threads $THREADCOUNT_RUN -p operationcount=0 -p maxexecutiontime=$RUNTIME -manual -s -t"
     java -cp "$CLASSPATH" site.ycsb.BenchClient $RUN_OPTS
   done
 fi

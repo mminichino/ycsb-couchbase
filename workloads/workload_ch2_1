@@ -22,7 +22,6 @@
 #   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
 #   Request distribution: zipfian
 
-threadcount=64
 operationcount=0
 maxexecutiontime=600
 workload=site.ycsb.tpc.tpcc.RunDriver
