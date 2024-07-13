@@ -2,19 +2,29 @@ package site.ycsb.db.couchbase3;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.cli.*;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.hadoop.ParquetFileWriter;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import site.ycsb.TableKeyType;
 import site.ycsb.TableKeys;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import org.apache.hadoop.fs.Path;
 import java.nio.file.Paths;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
-
 
 /**
  * Clean Cluster after Testing.
@@ -68,21 +78,56 @@ public class CouchbaseS3Export {
     }
   }
 
-  public Schema createSchema(String tableName, JsonNode sample) {
-    Schema schema = new Schema.Parser().parse(
-        "{\n" +
-        "  \"type\": \"record\",\n" +
-        "  \"name\": \"people\",\n" +
-        "  \"namespace\": \"com.example\",\n" +
-        "  \"fields\": [\n" +
-        "    {\"name\": \"firstName\", \"type\": \"string\"},\n" +
-        "    {\"name\": \"lastName\", \"type\": \"string\"},\n" +
-        "    {\"name\": \"gender\", \"type\": \"string\"},\n" +
-        "    {\"name\": \"age\", \"type\": \"int\"},\n" +
-        "    {\"name\": \"number\", \"type\": \"string\"}\n" +
-        "  ]\n" +
-        "}");
-    return schema;
+  public static Schema createSchema(String tableName, JsonNode sample) {
+    ObjectMapper mapper = new ObjectMapper();
+    ObjectNode config = mapper.createObjectNode();
+    config.put("type", "record");
+    config.put("name", tableName);
+    config.put("namespace", "com.example");
+    ArrayNode fields = mapper.createArrayNode();
+    for (Iterator<Map.Entry<String, JsonNode>> it = sample.fields(); it.hasNext(); ) {
+      Map.Entry<String, JsonNode> column = it.next();
+      if (column.getValue().isBoolean()) {
+        fields.add(mapper.createObjectNode().put("name", column.getKey()).put("type", "boolean"));
+      } else if (column.getValue().isInt()) {
+        fields.add(mapper.createObjectNode().put("name", column.getKey()).put("type", "int"));
+      } else if (column.getValue().isTextual()) {
+        fields.add(mapper.createObjectNode().put("name", column.getKey()).put("type", "string"));
+      } else if (column.getValue().isDouble()) {
+        fields.add(mapper.createObjectNode().put("name", column.getKey()).put("type", "double"));
+      } else if (column.getValue().isBinary()) {
+        fields.add(mapper.createObjectNode().put("name", column.getKey()).put("type", "bytes"));
+      } else if (column.getValue().isFloat()) {
+        fields.add(mapper.createObjectNode().put("name", column.getKey()).put("type", "float"));
+      } else if (column.getValue().isLong()) {
+        fields.add(mapper.createObjectNode().put("name", column.getKey()).put("type", "long"));
+      } else if (column.getValue().isNull()) {
+        fields.add(mapper.createObjectNode().put("name", column.getKey()).put("type", "null"));
+      }
+    }
+    config.set("fields", fields);
+    return new Schema.Parser().parse(config.toString());
+  }
+
+  public static GenericRecord getRecord(Schema schema, JsonNode document) {
+    GenericRecord record = new GenericData.Record(schema);
+    for (Iterator<Map.Entry<String, JsonNode>> it = document.fields(); it.hasNext(); ) {
+      Map.Entry<String, JsonNode> column = it.next();
+      record.put(column.getKey(), column.getValue());
+    }
+    return record;
+  }
+
+  public static JsonNode getSample(String host, String user, String password, boolean ssl, String bucket, String scope, String collection) {
+    CouchbaseConnect.CouchbaseBuilder dbBuilder = new CouchbaseConnect.CouchbaseBuilder();
+    CouchbaseConnect db;
+    dbBuilder.connect(host, user, password)
+        .ssl(ssl)
+        .bucket(bucket)
+        .scope(scope)
+        .collection(collection);
+    db = dbBuilder.build();
+    return db.runQuery(String.format("SELECT * from %s LIMIT 1", collection)).get(0).get(collection);
   }
 
   public static void doImport(Properties properties) {
@@ -102,17 +147,22 @@ public class CouchbaseS3Export {
 
   private static void exportCollection(String host, String user, String password, boolean ssl, String bucket, String scope, String collection) {
     CouchbaseStream stream = new CouchbaseStream(host, user, password, bucket, ssl, scope, collection);
+    Path path = new Path("output", collection + ".parquet");
 
-//    ParquetWriter<JsonNode> writer =
-//        JsonParquetWriter.Builder(path)
-//            .withSchema(schema)
-//            .withConf(conf)
-//            .withCompressionCodec(CompressionCodecName.SNAPPY)
-//            .withDictionaryEncoding(true)
-//            .withPageSize(1024 * 1024)
-//            .build();
+    JsonNode sample = getSample(host, user, password, ssl, bucket, scope, collection);
+    Schema schema = createSchema(collection, sample);
 
     try {
+      ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
+          .withRowGroupSize(ParquetWriter.DEFAULT_BLOCK_SIZE)
+          .withPageSize(ParquetWriter.DEFAULT_PAGE_SIZE)
+          .withSchema(schema)
+          .withConf(new Configuration())
+          .withCompressionCodec(CompressionCodecName.SNAPPY)
+          .withValidation(false)
+          .withDictionaryEncoding(false)
+          .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+          .build();
       stream.streamDocuments();
       stream.startToNow();
       stream.getDrain().forEach(o -> {
@@ -120,11 +170,12 @@ public class CouchbaseS3Export {
         ObjectMapper mapper = new ObjectMapper();
         try {
           JsonNode node = mapper.readTree(buffer.getContent());
-
+          writer.write(getRecord(schema, node));
         } catch (IOException e) {
           throw new RuntimeException(e);
         }
       });
+      writer.close();
       stream.stop();
     } catch (Exception e) {
       throw new RuntimeException(e);

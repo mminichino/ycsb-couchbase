@@ -40,11 +40,13 @@ import static com.couchbase.client.java.manager.analytics.DropDatasetAnalyticsOp
 import static com.couchbase.client.java.manager.analytics.CreateIndexAnalyticsOptions.createIndexAnalyticsOptions;
 import static com.couchbase.client.java.manager.analytics.DropIndexAnalyticsOptions.dropIndexAnalyticsOptions;
 import static com.couchbase.client.java.analytics.AnalyticsOptions.analyticsOptions;
+import static com.couchbase.client.java.query.QueryOptions.queryOptions;
 import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
 import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
 import static com.couchbase.client.java.kv.MutateInOptions.mutateInOptions;
 import static com.couchbase.client.java.kv.GetOptions.getOptions;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.gson.*;
 import org.slf4j.LoggerFactory;
@@ -678,6 +680,16 @@ public final class CouchbaseConnect {
           .forEach(data::add);
           return data;
       });
+  }
+
+  public List<JsonNode> runQuery(String statement) {
+    TypeRef<JsonNode> typeRef = new TypeRef<>() {};
+    Bucket bucket = cluster.bucket(bucketName);
+    Scope scope = bucket.scope(scopeName);
+    return scope.reactive().query(statement, queryOptions())
+        .flatMapMany(result -> result.rowsAs(typeRef))
+        .collectList()
+        .block();
   }
 
   public List<ObjectNode> analyticsQuery(String statement) {
