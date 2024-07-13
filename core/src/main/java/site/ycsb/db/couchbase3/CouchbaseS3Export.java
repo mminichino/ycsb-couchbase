@@ -13,16 +13,12 @@ import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import site.ycsb.TableKeyType;
-import site.ycsb.TableKeys;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import org.apache.hadoop.fs.Path;
 import java.nio.file.Paths;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -113,7 +109,23 @@ public class CouchbaseS3Export {
     GenericRecord record = new GenericData.Record(schema);
     for (Iterator<Map.Entry<String, JsonNode>> it = document.fields(); it.hasNext(); ) {
       Map.Entry<String, JsonNode> column = it.next();
-      record.put(column.getKey(), column.getValue());
+      if (column.getValue().isBoolean()) {
+        record.put(column.getKey(), column.getValue());
+      } else if (column.getValue().isInt()) {
+        record.put(column.getKey(), Integer.valueOf(column.getValue().asInt()));
+      } else if (column.getValue().isTextual()) {
+        record.put(column.getKey(), column.getValue());
+      } else if (column.getValue().isDouble()) {
+        record.put(column.getKey(), Double.valueOf(column.getValue().asDouble()));
+      } else if (column.getValue().isBinary()) {
+        record.put(column.getKey(), column.getValue());
+      } else if (column.getValue().isFloat()) {
+        record.put(column.getKey(), Double.valueOf(column.getValue().asDouble()));
+      } else if (column.getValue().isLong()) {
+        record.put(column.getKey(), Long.valueOf(column.getValue().asLong()));
+      } else if (column.getValue().isNull()) {
+        record.put(column.getKey(), column.getValue());
+      }
     }
     return record;
   }
