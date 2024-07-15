@@ -51,9 +51,12 @@ public class CouchbaseS3Export {
     CommandLine cmd = null;
     Properties properties = new Properties();
 
-    Option source = new Option("p", "properties", true, "source properties");
+    Option source = new Option("p", "properties", true, "properties");
+    Option collection = new Option("c", "collection", true, "source collection");
     source.setRequired(true);
+    collection.setRequired(false);
     options.addOption(source);
+    options.addOption(collection);
 
     CommandLineParser parser = new DefaultParser();
     HelpFormatter formatter = new HelpFormatter();
@@ -67,6 +70,7 @@ public class CouchbaseS3Export {
     }
 
     String propFile = cmd.getOptionValue("properties");
+    String collectionName = cmd.hasOption("collection") ? cmd.getOptionValue("collection") : null;
 
     try {
       properties.load(Files.newInputStream(Paths.get(propFile)));
@@ -81,7 +85,7 @@ public class CouchbaseS3Export {
     awsSessionToken = System.getenv(AWS_SESSION_TOKEN);
 
     try {
-      doImport(properties);
+      doImport(properties, collectionName);
     } catch (Exception e) {
       System.err.println("Error: " + e);
       e.printStackTrace(System.err);
@@ -157,17 +161,22 @@ public class CouchbaseS3Export {
     return db.runQuery(String.format("SELECT * from %s LIMIT 1", collection)).get(0).get(collection);
   }
 
-  public static void doImport(Properties properties) {
+  public static void doImport(Properties properties, String collectionName) {
+    String clusterCollection;
     String clusterHost = properties.getProperty(CLUSTER_HOST, CouchbaseConnect.DEFAULT_HOSTNAME);
     String clusterUser = properties.getProperty(CLUSTER_USER, CouchbaseConnect.DEFAULT_USER);
     String clusterPassword = properties.getProperty(CLUSTER_PASSWORD, CouchbaseConnect.DEFAULT_PASSWORD);
     boolean clusterSsl = properties.getProperty(CLUSTER_SSL, CouchbaseConnect.DEFAULT_SSL_SETTING).equals("true");
     String clusterBucket = properties.getProperty(CLUSTER_BUCKET, "bench");
     String clusterScope = properties.getProperty(CLUSTER_SCOPE, "bench");
-    String clusterCollection = properties.getProperty(CLUSTER_COLLECTION, "bench");
+    if (collectionName == null) {
+      clusterCollection = properties.getProperty(CLUSTER_COLLECTION, "bench");
+    } else {
+      clusterCollection = collectionName;
+    }
     String s3Bucket = properties.getProperty(CLUSTER_S3_BUCKET, "bucket");
 
-    System.err.println("Exporting data");
+    System.err.printf("Exporting collection %s to S3 bucket %s\n", clusterCollection, s3Bucket);
 
     exportCollection(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterScope, clusterCollection, s3Bucket);
   }

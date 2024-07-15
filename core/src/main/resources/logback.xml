@@ -98,4 +98,8 @@
     <appender-ref ref="FILE"/>
   </logger>
 
+  <logger name="io.netty.util" level="ERROR" additivity="false">
+    <appender-ref ref="FILE"/>
+  </logger>
+
 </configuration>
