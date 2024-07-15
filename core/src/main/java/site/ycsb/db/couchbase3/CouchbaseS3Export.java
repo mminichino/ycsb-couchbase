@@ -15,6 +15,8 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import org.apache.hadoop.fs.Path;
 import java.nio.file.Paths;
@@ -34,6 +36,15 @@ public class CouchbaseS3Export {
   public static final String CLUSTER_SCOPE = "couchbase.scope";
   public static final String CLUSTER_COLLECTION = "couchbase.collection";
   public static final String CLUSTER_S3_BUCKET = "couchbase.s3Bucket";
+
+  public static final String AWS_ACCESS_KEY_ID = "AWS_ACCESS_KEY_ID";
+  public static final String AWS_SECRET_ACCESS_KEY = "AWS_SECRET_ACCESS_KEY";
+  public static final String AWS_SESSION_TOKEN = "AWS_SESSION_TOKEN";
+
+  public static String awsAccessKey;
+  public static String awsSecretKey;
+  public static String awsSessionToken;
+  public static String awsCredentialsProvider = "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider";
 
   public static void main(String[] args) {
     Options options = new Options();
@@ -64,6 +75,10 @@ public class CouchbaseS3Export {
       e.printStackTrace(System.err);
       System.exit(1);
     }
+
+    awsAccessKey = System.getenv(AWS_ACCESS_KEY_ID);
+    awsSecretKey = System.getenv(AWS_SECRET_ACCESS_KEY);
+    awsSessionToken = System.getenv(AWS_SESSION_TOKEN);
 
     try {
       doImport(properties);
@@ -154,22 +169,27 @@ public class CouchbaseS3Export {
 
     System.err.println("Exporting data");
 
-    exportCollection(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterScope, clusterCollection);
+    exportCollection(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterScope, clusterCollection, s3Bucket);
   }
 
-  private static void exportCollection(String host, String user, String password, boolean ssl, String bucket, String scope, String collection) {
+  private static void exportCollection(String host, String user, String password, boolean ssl, String bucket, String scope, String collection, String s3Bucket) {
     CouchbaseStream stream = new CouchbaseStream(host, user, password, bucket, ssl, scope, collection);
-    Path path = new Path("output", collection + ".parquet");
+    Path path = new Path(String.format("s3a://%s/%s.parquet", s3Bucket, collection));
 
     JsonNode sample = getSample(host, user, password, ssl, bucket, scope, collection);
     Schema schema = createSchema(collection, sample);
+    Configuration config = new Configuration();
+    config.set("fs.s3a.access.key", awsAccessKey);
+    config.set("fs.s3a.secret.key", awsSecretKey);
+    config.set("fs.s3a.session.token", awsSessionToken);
+    config.set("fs.s3a.aws.credentials.provider", awsCredentialsProvider);
 
     try {
       ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
           .withRowGroupSize(ParquetWriter.DEFAULT_BLOCK_SIZE)
           .withPageSize(ParquetWriter.DEFAULT_PAGE_SIZE)
           .withSchema(schema)
-          .withConf(new Configuration())
+          .withConf(config)
           .withCompressionCodec(CompressionCodecName.SNAPPY)
           .withValidation(false)
           .withDictionaryEncoding(false)
