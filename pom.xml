@@ -3,7 +3,7 @@
 
     <groupId>site.ycsb</groupId>
     <artifactId>root</artifactId>
-    <version>2.0.4-38</version>
+    <version>2.0.4-42</version>
     <packaging>pom</packaging>
 
     <name>YCSB Couchbase</name>
@@ -37,6 +37,11 @@
                 <groupId>com.google.collections</groupId>
                 <artifactId>google-collections</artifactId>
                 <version>1.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>1.7.36</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.Iterators;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -15,19 +16,25 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import org.apache.hadoop.fs.Path;
 import java.nio.file.Paths;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.slf4j.LoggerFactory;
+import ch.qos.logback.classic.Logger;
 
 /**
  * Clean Cluster after Testing.
  */
 public class CouchbaseS3Export {
+  protected static final Logger LOGGER =
+      (Logger)LoggerFactory.getLogger("site.ycsb.db.couchbase3.CouchbaseS3Export");
   public static final String CLUSTER_HOST = "couchbase.hostname";
   public static final String CLUSTER_USER = "couchbase.username";
   public static final String CLUSTER_PASSWORD = "couchbase.password";
@@ -45,6 +52,8 @@ public class CouchbaseS3Export {
   public static String awsSecretKey;
   public static String awsSessionToken;
   public static String awsCredentialsProvider = "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider";
+
+  public static final AtomicLong counter = new AtomicLong(0);
 
   public static void main(String[] args) {
     Options options = new Options();
@@ -183,7 +192,6 @@ public class CouchbaseS3Export {
 
   private static void exportCollection(String host, String user, String password, boolean ssl, String bucket, String scope, String collection, String s3Bucket) {
     CouchbaseStream stream = new CouchbaseStream(host, user, password, bucket, ssl, scope, collection);
-    Path path = new Path(String.format("s3a://%s/%s.parquet", s3Bucket, collection));
 
     JsonNode sample = getSample(host, user, password, ssl, bucket, scope, collection);
     Schema schema = createSchema(collection, sample);
@@ -194,29 +202,31 @@ public class CouchbaseS3Export {
     config.set("fs.s3a.aws.credentials.provider", awsCredentialsProvider);
 
     try {
-      ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
-          .withRowGroupSize(ParquetWriter.DEFAULT_BLOCK_SIZE)
-          .withPageSize(ParquetWriter.DEFAULT_PAGE_SIZE)
-          .withSchema(schema)
-          .withConf(config)
-          .withCompressionCodec(CompressionCodecName.SNAPPY)
-          .withValidation(false)
-          .withDictionaryEncoding(false)
-          .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
-          .build();
       stream.streamDocuments();
       stream.startToNow();
-      stream.getDrain().forEach(o -> {
-        DocumentBuffer buffer = new DocumentBuffer(o);
-        ObjectMapper mapper = new ObjectMapper();
-        try {
+      Iterator<List<ByteBuffer>> it = Iterators.partition(stream.getDrain().iterator(), 100_000);
+      while(it.hasNext()) {
+        long fileNumber = counter.incrementAndGet();
+        Path path = new Path(String.format("s3a://%s/%s/%s-%04d.parquet", s3Bucket, collection, collection, fileNumber));
+        ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
+            .withRowGroupSize(ParquetWriter.DEFAULT_BLOCK_SIZE)
+            .withPageSize(ParquetWriter.DEFAULT_PAGE_SIZE)
+            .withSchema(schema)
+            .withConf(config)
+            .withCompressionCodec(CompressionCodecName.SNAPPY)
+            .withValidation(false)
+            .withDictionaryEncoding(false)
+            .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+            .build();
+        List<ByteBuffer> chunk = it.next();
+        for (ByteBuffer entry : chunk) {
+          DocumentBuffer buffer = new DocumentBuffer(entry);
+          ObjectMapper mapper = new ObjectMapper();
           JsonNode node = mapper.readTree(buffer.getContent());
           writer.write(getRecord(schema, node));
-        } catch (IOException e) {
-          throw new RuntimeException(e);
         }
-      });
-      writer.close();
+        writer.close();
+      }
       stream.stop();
     } catch (Exception e) {
       throw new RuntimeException(e);
