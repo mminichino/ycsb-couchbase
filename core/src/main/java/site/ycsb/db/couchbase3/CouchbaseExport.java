@@ -1,13 +1,12 @@
 package site.ycsb.db.couchbase3;
 
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.couchbase.client.core.deps.io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import com.couchbase.client.dcp.*;
 import com.couchbase.client.dcp.config.DcpControl;
-import com.couchbase.client.dcp.core.event.CouchbaseEvent;
 import com.couchbase.client.dcp.events.StreamEndEvent;
 import com.couchbase.client.dcp.message.DcpMutationMessage;
-import com.couchbase.client.dcp.message.PartitionAndSeqno;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -69,7 +68,7 @@ public class CouchbaseExport {
   public static String awsCredentialsProvider = "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider";
 
   public static final AtomicLong fileCounter = new AtomicLong(0);
-  public static final AtomicLong opCounter = new AtomicLong(0);
+  public static final AtomicLong dataSizeCounter = new AtomicLong(0);
   public static final AtomicLong totalCounter = new AtomicLong(0);
 
   private static String hostname;
@@ -153,6 +152,12 @@ public class CouchbaseExport {
     }
     s3Bucket = properties.getProperty(CLUSTER_S3_BUCKET, "bucket");
 
+    boolean debug = properties.getProperty("couchbase.debug", "false").equals("true");
+
+    if (debug) {
+      LOGGER.setLevel(Level.DEBUG);
+    }
+
     System.out.printf("Exporting collection %s to S3 bucket \"%s\"\n", collection, s3Bucket);
 
     String couchbasePrefix;
@@ -202,15 +207,23 @@ public class CouchbaseExport {
     streamDocuments();
     createSystemEventHandler();
     startToNow();
-    while (!lastPartition.get()) {
+
+    while (!lastPartition.get() && !client.sessionState().isAtEnd()) {
       try {
-        Thread.sleep(500L);
+        Thread.sleep(TimeUnit.SECONDS.toMillis(1));
       } catch (InterruptedException e) {
         System.out.println("Interrupted");
       }
     }
+
+    try {
+      Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+    } catch (InterruptedException e) {
+      System.out.println("Interrupted");
+    }
+
     synchronized (WRITE_COORDINATOR) {
-      if (!docQueue.isEmpty()) {
+      while (!docQueue.isEmpty()) {
         writeParquetFile();
         LOGGER.debug(String.format("Wrote (Overflow) => %,d\n", totalCounter.get()));
       }
@@ -302,13 +315,13 @@ public class CouchbaseExport {
           .withDictionaryEncoding(false)
           .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
           .build()) {
-        for (String document : docQueue) {
+        while (docQueue.peek() != null) {
+          String document = docQueue.take();
           JsonNode node = mapper.readTree(document);
           writer.write(getRecord(schema, node));
           totalCounter.incrementAndGet();
         }
       }
-      docQueue.clear();
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -320,11 +333,12 @@ public class CouchbaseExport {
         String content = DcpMutationMessage.content(event).toString(StandardCharsets.UTF_8);
         try {
           docQueue.put(content);
-          opCounter.incrementAndGet();
+          dataSizeCounter.addAndGet(content.length());
           flowController.ack(event);
           synchronized (WRITE_COORDINATOR) {
-            if (!docQueue.isEmpty() && (docQueue.size() % 100_000 == 0)) {
+            if (!docQueue.isEmpty() && (dataSizeCounter.get() > 256_000_000)) {
               writeParquetFile();
+              dataSizeCounter.set(0);
               LOGGER.debug(String.format("Wrote (Main) => %,d\n", totalCounter.get()));
             }
           }
