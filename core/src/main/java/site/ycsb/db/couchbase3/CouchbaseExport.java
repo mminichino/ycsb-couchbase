@@ -212,6 +212,7 @@ public class CouchbaseExport {
     synchronized (WRITE_COORDINATOR) {
       if (!docQueue.isEmpty()) {
         writeParquetFile();
+        LOGGER.debug(String.format("Wrote (Overflow) => %,d\n", totalCounter.get()));
       }
     }
     stop();
@@ -322,8 +323,9 @@ public class CouchbaseExport {
           opCounter.incrementAndGet();
           flowController.ack(event);
           synchronized (WRITE_COORDINATOR) {
-            if (!docQueue.isEmpty() && (docQueue.size() % 100_000 == 0 || client.sessionState().isAtEnd())) {
+            if (!docQueue.isEmpty() && (docQueue.size() % 100_000 == 0)) {
               writeParquetFile();
+              LOGGER.debug(String.format("Wrote (Main) => %,d\n", totalCounter.get()));
             }
           }
         } catch (Exception e) {
