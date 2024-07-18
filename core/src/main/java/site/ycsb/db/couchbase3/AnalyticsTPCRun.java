@@ -7,6 +7,7 @@ import com.couchbase.client.core.env.IoConfig;
 import com.couchbase.client.core.env.NetworkResolution;
 import com.couchbase.client.core.env.SecurityConfig;
 import com.couchbase.client.core.env.TimeoutConfig;
+import com.couchbase.client.core.error.AmbiguousTimeoutException;
 import com.couchbase.client.core.error.CollectionExistsException;
 import com.couchbase.client.core.error.DocumentNotFoundException;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
@@ -231,13 +232,16 @@ public class AnalyticsTPCRun extends BenchRun {
    * query records.
    */
   @Override
-  public List<ObjectNode> query(String statement, int number) {
+  public List<ObjectNode> query(String statement, int number) throws BenchTimeoutException {
     TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
     try {
       return retryBlock(() -> {
-        AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions().timeout(Duration.ofMinutes(1440)));
+        AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions().timeout(Duration.ofSeconds(600)).readonly(true));
         return result.rowsAs(typeRef);
       });
+    } catch (AmbiguousTimeoutException e) {
+      LOGGER.error("query timeout: {}", e.getMessage(), e);
+      throw new BenchTimeoutException(e.getMessage());
     } catch (Throwable t) {
       LOGGER.error("query exception: {}", t.getMessage(), t);
       return null;

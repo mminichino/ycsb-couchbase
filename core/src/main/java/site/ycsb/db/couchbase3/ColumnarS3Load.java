@@ -36,11 +36,13 @@ public class ColumnarS3Load {
 
     Option source = new Option("p", "properties", true, "source properties");
     Option collectionOpt = new Option("c", "collection", true, "source collection");
+    Option showOpt = new Option("s", "show", false, "show SQL");
     source.setRequired(true);
     collectionOpt.setRequired(false);
+    showOpt.setRequired(false);
     options.addOption(source);
     options.addOption(collectionOpt);
-
+    options.addOption(showOpt);
 
     CommandLineParser parser = new DefaultParser();
     HelpFormatter formatter = new HelpFormatter();
@@ -64,9 +66,10 @@ public class ColumnarS3Load {
     }
 
     String collectionName = cmd.hasOption("collection") ? cmd.getOptionValue("collection") : null;
+    boolean showSQL = cmd.hasOption("show");
 
     try {
-      doImport(properties, collectionName);
+      doImport(properties, collectionName, showSQL);
     } catch (Exception e) {
       System.err.println("Error: " + e);
       e.printStackTrace(System.err);
@@ -74,7 +77,7 @@ public class ColumnarS3Load {
     }
   }
 
-  public static void doImport(Properties properties, String collectionName) {
+  public static void doImport(Properties properties, String collectionName, boolean showSQL) {
     String clusterHost = properties.getProperty(CLUSTER_HOST, CouchbaseConnect.DEFAULT_HOSTNAME);
     String clusterUser = properties.getProperty(CLUSTER_USER, CouchbaseConnect.DEFAULT_USER);
     String clusterPassword = properties.getProperty(CLUSTER_PASSWORD, CouchbaseConnect.DEFAULT_PASSWORD);
@@ -87,7 +90,7 @@ public class ColumnarS3Load {
 
     System.err.println("Starting S3 load");
 
-    columnarSetup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterScope, s3Bucket, dbLink, importType, collectionName);
+    columnarSetup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterScope, s3Bucket, dbLink, importType, collectionName, showSQL);
   }
 
   public static void createAnalyticsCollection(CouchbaseConnect db, String bucketName, String scopeName, String name, String[] keys) {
@@ -106,12 +109,29 @@ public class ColumnarS3Load {
     db.analyticsQuery(statement);
   }
 
-  public static void optimizeAnalyticsCollection(CouchbaseConnect db, String bucketName, String scopeName, String name) {
-    String optimize = "ANALYZE COLLECTION " + bucketName + "." + scopeName + "." + name + " WITH {\"sample\": \"high\"};";
-    db.analyticsQuery(optimize);
+  public static boolean loadAnalyticsCollection(CouchbaseConnect db, String statement, String table, String s3Bucket, String dbLink, boolean showSQL) {
+    String copyIntoSQL = String.format(statement, table, s3Bucket, dbLink, table);
+    if (showSQL) {
+      System.out.println(copyIntoSQL);
+      return true;
+    } else {
+      List<ObjectNode> result = db.analyticsScopeQuery(copyIntoSQL);
+      return result != null;
+    }
   }
 
-  private static void columnarSetup(String host, String user, String password, boolean ssl, String bucket, String scope, String s3Bucket, String dbLink, ImportFileType importType, String collectionName) {
+  public static boolean optimizeAnalyticsCollection(CouchbaseConnect db, String bucketName, String scopeName, String name, boolean showSQL) {
+    String optimize = "ANALYZE COLLECTION " + bucketName + "." + scopeName + "." + name + " WITH {\"sample\": \"high\"};";
+    if (showSQL) {
+      System.out.println(optimize);
+      return true;
+    } else {
+      List<ObjectNode> result = db.analyticsScopeQuery(optimize);
+      return result != null;
+    }
+  }
+
+  private static void columnarSetup(String host, String user, String password, boolean ssl, String bucket, String scope, String s3Bucket, String dbLink, ImportFileType importType, String collectionName, boolean showSQL) {
     CouchbaseConnect.CouchbaseBuilder dbBuilder = new CouchbaseConnect.CouchbaseBuilder();
     CouchbaseConnect db;
     String statement;
@@ -151,11 +171,12 @@ public class ColumnarS3Load {
         }
         System.out.printf("Importing table %s (primary keys: %s)\n", table, String.join(",", keys));
         createAnalyticsCollection(db, bucket, scope, table, keys);
-        List<ObjectNode> result = db.analyticsScopeQuery(String.format(statement, table, s3Bucket, dbLink, table));
-        if (result == null) {
-          System.err.printf("Error: table %s import failed\n", table);
+        if (!loadAnalyticsCollection(db, statement, table, s3Bucket, dbLink, showSQL)) {
+          System.err.printf("Error: table %s import failed", table);
         }
-        optimizeAnalyticsCollection(db, bucket, scope, table);
+        if (!optimizeAnalyticsCollection(db, bucket, scope, table, showSQL)) {
+          System.err.printf("Error: table %s analyze failed", table);
+        }
       }
     } catch (Exception e) {
       throw new RuntimeException(e);
