@@ -16,6 +16,7 @@ import com.couchbase.client.core.error.ScopeExistsException;
 import com.couchbase.client.core.error.CollectionExistsException;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.core.config.PortInfo;
+import com.couchbase.client.core.retry.FailFastRetryStrategy;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
 import com.couchbase.client.java.codec.RawJsonTranscoder;
@@ -255,6 +256,7 @@ public final class CouchbaseConnect {
           Consumer<TimeoutConfig.Builder> timeOutConfiguration = timeoutConfig -> timeoutConfig
               .kvTimeout(Duration.ofSeconds(5))
               .connectTimeout(Duration.ofSeconds(15))
+              .analyticsTimeout(Duration.ofSeconds(360))
               .queryTimeout(Duration.ofSeconds(75));
 
           environment = ClusterEnvironment
@@ -725,7 +727,9 @@ public final class CouchbaseConnect {
     Bucket bucket = cluster.bucket(bucketName);
     Scope scope = bucket.scope(scopeName);
     try {
-      AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions().timeout(Duration.ofSeconds(360)).priority(true));
+      AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions()
+          .timeout(Duration.ofSeconds(360))
+          .priority(true));
       return result.rowsAs(typeRef);
     } catch (Throwable t) {
       LOGGER.error("analytics query exception: {}", t.getMessage(), t);
@@ -739,7 +743,9 @@ public final class CouchbaseConnect {
     Scope scope = bucket.scope(scopeName);
     try {
       AnalyticsResult result = scope.analyticsQuery(statement,
-          analyticsOptions().parameters(com.couchbase.client.java.json.JsonArray.from(parameters)).timeout(Duration.ofSeconds(360)).priority(true));
+          analyticsOptions().parameters(com.couchbase.client.java.json.JsonArray.from(parameters))
+              .timeout(Duration.ofSeconds(360))
+              .priority(true));
       return result.rowsAs(typeRef);
     } catch (Throwable t) {
       LOGGER.error("analytics query exception: {}", t.getMessage(), t);

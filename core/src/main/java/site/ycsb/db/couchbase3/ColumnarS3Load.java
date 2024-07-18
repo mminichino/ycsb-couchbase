@@ -172,11 +172,11 @@ public class ColumnarS3Load {
         System.out.printf("Importing table %s (primary keys: %s)\n", table, String.join(",", keys));
         createAnalyticsCollection(db, bucket, scope, table, keys);
         if (!loadAnalyticsCollection(db, statement, table, s3Bucket, dbLink, showSQL)) {
-          System.err.printf("Error: table %s import failed", table);
+          System.err.printf("Error: table %s import failed\n", table);
         }
-        if (!optimizeAnalyticsCollection(db, bucket, scope, table, showSQL)) {
-          System.err.printf("Error: table %s analyze failed", table);
-        }
+//        if (!optimizeAnalyticsCollection(db, bucket, scope, table, showSQL)) {
+//          System.err.printf("Error: table %s analyze failed\n", table);
+//        }
       }
     } catch (Exception e) {
       throw new RuntimeException(e);

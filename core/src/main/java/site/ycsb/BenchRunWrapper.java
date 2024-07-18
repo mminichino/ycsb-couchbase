@@ -138,20 +138,15 @@ public class BenchRunWrapper extends BenchRun {
   /**
    * Execute benchmark query.
    */
-  public List<ObjectNode> query(String statement, int number) {
+  public List<ObjectNode> query(String statement, int number) throws BenchTimeoutException {
     try (final TraceScope span = tracer.newScope(scopeStringRead)) {
       Status status = Status.OK;
       long ist = measurements.getIntendedStartTimeNs();
       long st = System.nanoTime();
-      List<ObjectNode> res = null;
-      try {
-        res = db.query(statement, number);
-      } catch (BenchTimeoutException e) {
-        status = Status.SERVICE_UNAVAILABLE;
-      } finally {
-        if (res == null && status == Status.OK) {
-          status = Status.ERROR;
-        }
+      List<ObjectNode> res;
+      res = db.query(statement, number);
+      if (res == null) {
+        status = Status.ERROR;
       }
       long en = System.nanoTime();
       measure("QUERY_" + number, status, ist, st, en);

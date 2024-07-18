@@ -90,7 +90,7 @@ public class RunDriver extends BenchWorkload {
           long elapsedTimeNano = end - start;
           elapsedTime = (double) elapsedTimeNano / 1_000_000_000;
         } catch (BenchTimeoutException e) {
-          String result = String.format("Query %d timed out\n", i + 1);
+          String result = String.format("Query %d timed out: %s\n", i + 1, e.getMessage());
           System.out.printf(result);
           LOGGER.info(result);
           continue;

@@ -9,15 +9,19 @@ import com.couchbase.client.core.env.SecurityConfig;
 import com.couchbase.client.core.env.TimeoutConfig;
 import com.couchbase.client.core.error.AmbiguousTimeoutException;
 import com.couchbase.client.core.error.CollectionExistsException;
+import com.couchbase.client.core.error.CouchbaseException;
 import com.couchbase.client.core.error.DocumentNotFoundException;
+import com.couchbase.client.core.error.context.ErrorContext;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.core.retry.FailFastRetryStrategy;
+import com.couchbase.client.core.retry.RetryStrategy;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
 import com.couchbase.client.java.codec.RawJsonTranscoder;
 import com.couchbase.client.java.codec.Transcoder;
 import com.couchbase.client.java.codec.TypeRef;
 import com.couchbase.client.java.env.ClusterEnvironment;
+import com.couchbase.client.java.http.*;
 import com.couchbase.client.java.json.JsonArray;
 import com.couchbase.client.java.manager.collection.CollectionManager;
 import com.couchbase.client.java.manager.query.CollectionQueryIndexManager;
@@ -25,6 +29,8 @@ import com.couchbase.client.java.manager.query.CreateQueryIndexOptions;
 import com.couchbase.client.java.query.QueryResult;
 import com.couchbase.client.java.query.QueryStatus;
 import com.couchbase.client.java.analytics.AnalyticsResult;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.LoggerFactory;
 import site.ycsb.Record;
@@ -75,6 +81,8 @@ public class AnalyticsTPCRun extends BenchRun {
   private Transcoder transcoder;
   private Class<?> contentType;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
+  private static long analyticsTimeout;
+  private static String contextID;
 
   @Override
   public void init() throws DBException {
@@ -131,6 +139,7 @@ public class AnalyticsTPCRun extends BenchRun {
     long kvTimeout = Long.parseLong(properties.getProperty("couchbase.kvTimeout", "5"));
     long connectTimeout = Long.parseLong(properties.getProperty("couchbase.connectTimeout", "5"));
     long queryTimeout = Long.parseLong(properties.getProperty("couchbase.queryTimeout", "75"));
+    analyticsTimeout = Long.parseLong(properties.getProperty("couchbase.analyticsTimeout", "300"));
 
     ttlSeconds = Integer.parseInt(properties.getProperty("couchbase.ttlSeconds", "0"));
 
@@ -157,6 +166,7 @@ public class AnalyticsTPCRun extends BenchRun {
 
           Consumer<TimeoutConfig.Builder> timeOutConfiguration = timeoutConfig -> timeoutConfig
               .kvTimeout(Duration.ofSeconds(kvTimeout))
+              .analyticsTimeout(Duration.ofSeconds(analyticsTimeout))
               .connectTimeout(Duration.ofSeconds(connectTimeout))
               .queryTimeout(Duration.ofSeconds(queryTimeout));
 
@@ -170,7 +180,11 @@ public class AnalyticsTPCRun extends BenchRun {
               ClusterOptions.clusterOptions(username, password).environment(environment));
           bucket = cluster.bucket(bucketName);
           scope = bucket.scope(scopeName);
-          collectionManager = bucket.collections();
+
+          if (contextID == null) {
+            contextID = UUID.randomUUID().toString();
+            LOGGER.info("Query context ID: {}", contextID);
+          }
         }
       } catch(Exception e) {
         logError(e, connectString);
@@ -235,13 +249,19 @@ public class AnalyticsTPCRun extends BenchRun {
   public List<ObjectNode> query(String statement, int number) throws BenchTimeoutException {
     TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
     try {
-      return retryBlock(() -> {
-        AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions().timeout(Duration.ofSeconds(600)).readonly(true));
-        return result.rowsAs(typeRef);
-      });
-    } catch (AmbiguousTimeoutException e) {
-      LOGGER.error("query timeout: {}", e.getMessage(), e);
-      throw new BenchTimeoutException(e.getMessage());
+      AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions()
+          .timeout(Duration.ofSeconds(analyticsTimeout))
+          .clientContextId(contextID)
+          .readonly(true));
+      return result.rowsAs(typeRef);
+    } catch (CouchbaseException e) {
+      ErrorContext context = e.context();
+      if (context.exportAsMap().getOrDefault("reason", "None").toString().equals("TIMEOUT")) {
+        LOGGER.warn("query {} timeout", number);
+        throw new BenchTimeoutException("query timeout " + analyticsTimeout + " seconds");
+      } else {
+        throw new RuntimeException(e.getMessage(), e);
+      }
     } catch (Throwable t) {
       LOGGER.error("query exception: {}", t.getMessage(), t);
       return null;
