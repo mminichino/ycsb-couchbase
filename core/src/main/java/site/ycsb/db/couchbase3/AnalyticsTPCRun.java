@@ -235,7 +235,7 @@ public class AnalyticsTPCRun extends BenchRun {
     TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
     try {
       return retryBlock(() -> {
-        AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions());
+        AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions().timeout(Duration.ofMinutes(1440)));
         return result.rowsAs(typeRef);
       });
     } catch (Throwable t) {

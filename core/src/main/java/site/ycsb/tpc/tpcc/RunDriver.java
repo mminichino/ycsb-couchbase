@@ -92,7 +92,9 @@ public class RunDriver extends BenchWorkload {
           continue;
         }
 
-        System.out.printf("Query %d returned %d results in %.4f seconds\n", i + 1, results.size(), elapsedTime);
+        String stats = String.format("Query %d returned %d results in %.4f seconds\n", i + 1, results.size(), elapsedTime);
+        System.out.printf(stats);
+        LOGGER.info(stats);
 
         LOGGER.info("Query #{}", i + 1);
         for (ObjectNode result : results) {

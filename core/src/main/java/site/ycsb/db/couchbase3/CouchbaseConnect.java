@@ -726,7 +726,7 @@ public final class CouchbaseConnect {
     Bucket bucket = cluster.bucket(bucketName);
     Scope scope = bucket.scope(scopeName);
     try {
-      AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions());
+      AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions().timeout(Duration.ofMinutes(240)));
       return result.rowsAs(typeRef);
     } catch (Throwable t) {
       LOGGER.error("analytics query exception: {}", t.getMessage(), t);
@@ -740,7 +740,7 @@ public final class CouchbaseConnect {
     Scope scope = bucket.scope(scopeName);
     try {
       AnalyticsResult result = scope.analyticsQuery(statement,
-          analyticsOptions().parameters(com.couchbase.client.java.json.JsonArray.from(parameters)));
+          analyticsOptions().parameters(com.couchbase.client.java.json.JsonArray.from(parameters)).timeout(Duration.ofMinutes(240)));
       return result.rowsAs(typeRef);
     } catch (Throwable t) {
       LOGGER.error("analytics query exception: {}", t.getMessage(), t);
