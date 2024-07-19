@@ -131,7 +131,9 @@ public class ColumnarS3Load {
     }
   }
 
-  private static void columnarSetup(String host, String user, String password, boolean ssl, String bucket, String scope, String s3Bucket, String dbLink, ImportFileType importType, String collectionName, boolean showSQL) {
+  private static void columnarSetup(String host, String user, String password, boolean ssl, String bucket, String scope,
+                                    String s3Bucket, String dbLink, ImportFileType importType, String collectionName,
+                                    boolean showSQL) {
     CouchbaseConnect.CouchbaseBuilder dbBuilder = new CouchbaseConnect.CouchbaseBuilder();
     CouchbaseConnect db;
     String statement;
@@ -174,9 +176,9 @@ public class ColumnarS3Load {
         if (!loadAnalyticsCollection(db, statement, table, s3Bucket, dbLink, showSQL)) {
           System.err.printf("Error: table %s import failed\n", table);
         }
-//        if (!optimizeAnalyticsCollection(db, bucket, scope, table, showSQL)) {
-//          System.err.printf("Error: table %s analyze failed\n", table);
-//        }
+        if (!optimizeAnalyticsCollection(db, bucket, scope, table, showSQL)) {
+          System.err.printf("Error: table %s analyze failed\n", table);
+        }
       }
     } catch (Exception e) {
       throw new RuntimeException(e);
