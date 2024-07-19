@@ -6,9 +6,7 @@ import org.apache.commons.cli.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * Clean Cluster after Testing.
@@ -37,12 +35,15 @@ public class ColumnarS3Load {
     Option source = new Option("p", "properties", true, "source properties");
     Option collectionOpt = new Option("c", "collection", true, "source collection");
     Option showOpt = new Option("s", "show", false, "show SQL");
+    Option jsonOpt = new Option("j", "json", false, "JSON native schema");
     source.setRequired(true);
     collectionOpt.setRequired(false);
     showOpt.setRequired(false);
+    jsonOpt.setRequired(false);
     options.addOption(source);
     options.addOption(collectionOpt);
     options.addOption(showOpt);
+    options.addOption(jsonOpt);
 
     CommandLineParser parser = new DefaultParser();
     HelpFormatter formatter = new HelpFormatter();
@@ -67,9 +68,10 @@ public class ColumnarS3Load {
 
     String collectionName = cmd.hasOption("collection") ? cmd.getOptionValue("collection") : null;
     boolean showSQL = cmd.hasOption("show");
+    boolean jsonSchema = cmd.hasOption("json");
 
     try {
-      doImport(properties, collectionName, showSQL);
+      doImport(properties, collectionName, showSQL, jsonSchema);
     } catch (Exception e) {
       System.err.println("Error: " + e);
       e.printStackTrace(System.err);
@@ -77,7 +79,7 @@ public class ColumnarS3Load {
     }
   }
 
-  public static void doImport(Properties properties, String collectionName, boolean showSQL) {
+  public static void doImport(Properties properties, String collectionName, boolean showSQL, boolean jsonSchema) {
     String clusterHost = properties.getProperty(CLUSTER_HOST, CouchbaseConnect.DEFAULT_HOSTNAME);
     String clusterUser = properties.getProperty(CLUSTER_USER, CouchbaseConnect.DEFAULT_USER);
     String clusterPassword = properties.getProperty(CLUSTER_PASSWORD, CouchbaseConnect.DEFAULT_PASSWORD);
@@ -90,7 +92,7 @@ public class ColumnarS3Load {
 
     System.err.println("Starting S3 load");
 
-    columnarSetup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterScope, s3Bucket, dbLink, importType, collectionName, showSQL);
+    columnarSetup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterScope, s3Bucket, dbLink, importType, collectionName, showSQL, jsonSchema);
   }
 
   public static void createAnalyticsCollection(CouchbaseConnect db, String bucketName, String scopeName, String name, String[] keys) {
@@ -133,25 +135,27 @@ public class ColumnarS3Load {
 
   private static void columnarSetup(String host, String user, String password, boolean ssl, String bucket, String scope,
                                     String s3Bucket, String dbLink, ImportFileType importType, String collectionName,
-                                    boolean showSQL) {
+                                    boolean showSQL, boolean jsonSchema) {
     CouchbaseConnect.CouchbaseBuilder dbBuilder = new CouchbaseConnect.CouchbaseBuilder();
     CouchbaseConnect db;
     String statement;
-    String[] tableNames = {"item", "warehouse", "stock", "district", "customer", "history", "orders", "new_orders", "order_line", "supplier", "nation", "region"};
-    String[][] keyNames = {
-        {"i_id"},
-        {"w_id"},
-        {"s_i_id", "s_w_id"},
-        {"d_id", "d_w_id"},
-        {"c_id", "c_d_id", "c_w_id"},
-        {"h_c_id", "h_c_d_id", "h_c_w_id"},
-        {"o_id", "o_d_id", "o_w_id"},
-        {"no_o_id", "no_d_id", "no_w_id"},
-        {"ol_o_id", "ol_d_id", "ol_w_id", "ol_number"},
-        {"su_suppkey"},
-        {"n_nationkey"},
-        {"r_regionkey"}
-    };
+    String[] tableNamesA = {"item", "warehouse", "stock", "district", "customer", "history", "orders", "new_orders", "order_line", "supplier", "nation", "region"};
+    String[] tableNamesB = {"item", "warehouse", "stock", "district", "customer", "history", "orders", "neworder", "supplier", "nation", "region"};
+    String[] tableNames;
+    Map<String, String[]> keyNames = new HashMap<>();
+    keyNames.put("item", new String[]{"i_id"});
+    keyNames.put("warehouse", new String[]{"w_id"});
+    keyNames.put("stock", new String[]{"s_i_id", "s_w_id"});
+    keyNames.put("district", new String[]{"d_id", "d_w_id"});
+    keyNames.put("customer", new String[]{"c_id", "c_d_id", "c_w_id"});
+    keyNames.put("history", new String[]{"h_c_id", "h_c_d_id", "h_c_w_id"});
+    keyNames.put("orders", new String[]{"o_id", "o_d_id", "o_w_id"});
+    keyNames.put("new_orders", new String[]{"no_o_id", "no_d_id", "no_w_id"});
+    keyNames.put("neworder", new String[]{"no_o_id", "no_d_id", "no_w_id"});
+    keyNames.put("order_line", new String[]{"ol_o_id", "ol_d_id", "ol_w_id", "ol_number"});
+    keyNames.put("supplier", new String[]{"su_suppkey"});
+    keyNames.put("nation", new String[]{"n_nationkey"});
+    keyNames.put("region", new String[]{"r_regionkey"});
     if (importType == ImportFileType.JSON) {
       statement = "COPY INTO `%s` FROM `%s` AT `%s` PATH '%s' WITH { 'format': 'json', 'include': ['*.gzip', '*.gz'] }";
     } else {
@@ -165,9 +169,16 @@ public class ColumnarS3Load {
           .bucket(bucket)
           .scope(scope);
       db = dbBuilder.build();
+
+      if (jsonSchema) {
+        tableNames = tableNamesB;
+      } else {
+        tableNames = tableNamesA;
+      }
+
       for (int i = 0; i < tableNames.length; i++) {
         String table = tableNames[i];
-        String[] keys = keyNames[i];
+        String[] keys = keyNames.get(table);
         if (collectionName != null && !collectionName.equals(table)) {
           continue;
         }
