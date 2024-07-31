@@ -521,13 +521,17 @@ public final class CouchbaseConnect {
     queryIndexMgr.createPrimaryIndex(options);
   }
 
-  public void createFieldIndex(String field) {
+  public void createFieldIndex(String bucketName, String scopeName, String collectionName, String field) {
+    Bucket bucket = cluster.bucket(bucketName);
+    Scope scope = bucket.scope(scopeName);
+    Collection collection = scope.collection(collectionName);
     int replicaCount = getIndexReplicaCount();
     if (collection == null) {
-      connectKeyspace();
+      throw new RuntimeException("Can not connect to collection " + collectionName);
     }
     CollectionQueryIndexManager queryIndexMgr = collection.queryIndexes();
     CreateQueryIndexOptions options = CreateQueryIndexOptions.createQueryIndexOptions()
+
         .deferred(false)
         .numReplicas(replicaCount)
         .ignoreIfExists(true);

@@ -135,7 +135,7 @@ public class CouchbaseTestSetup extends TestSetup {
       db.createCollection(bucket, scope, collection);
       if (index) {
         System.err.printf("Creating index on field %s\n", field);
-        db.createFieldIndex(field);
+        db.createFieldIndex(bucket, scope, collection, field);
       }
       db.disconnect();
     } catch (Exception e) {

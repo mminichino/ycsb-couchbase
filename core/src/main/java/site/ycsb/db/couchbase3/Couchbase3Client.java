@@ -19,18 +19,14 @@ package site.ycsb.db.couchbase3;
 
 import static com.couchbase.client.java.kv.MutateInOptions.mutateInOptions;
 import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
-import static com.couchbase.client.java.kv.GetOptions.getOptions;
 import static com.couchbase.client.java.query.QueryOptions.queryOptions;
 
 import ch.qos.logback.classic.Logger;
 import com.couchbase.client.core.deps.io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import com.couchbase.client.core.env.*;
 import com.couchbase.client.core.error.DocumentNotFoundException;
-import com.couchbase.client.core.retry.FailFastRetryStrategy;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
-import com.couchbase.client.java.codec.RawJsonTranscoder;
-import com.couchbase.client.java.codec.Transcoder;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
@@ -47,6 +43,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import com.couchbase.client.java.json.JsonArray;
+import com.couchbase.client.java.json.JsonObject;
+import com.couchbase.client.java.kv.GetResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -78,15 +76,14 @@ public class Couchbase3Client extends DB {
   private static volatile Cluster cluster;
   private static volatile Bucket bucket;
   private static volatile Collection collection;
+  private static volatile ReactiveCollection reactiveCollection;
   private static volatile ClusterEnvironment environment;
-  private static String bucketName;
+  private static String keySpace;
   private boolean adhoc;
   private int maxParallelism;
   private static int ttlSeconds;
   private boolean arrayMode;
   private String arrayKey;
-  private Transcoder transcoder;
-  private Class<?> contentType;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
 
   @Override
@@ -113,24 +110,15 @@ public class Couchbase3Client extends DB {
     String clientCert = properties.getProperty(COUCHBASE_CLIENT_CERTIFICATE);
     String rootCert = properties.getProperty(COUCHBASE_ROOT_CERTIFICATE);
     KeyStoreType keyStoreType = KeyStoreType.valueOf(properties.getProperty(COUCHBASE_KEYSTORE_TYPE, "PKCS12").toUpperCase());
-    bucketName = properties.getProperty(COUCHBASE_BUCKET, "ycsb");
+    String bucketName = properties.getProperty(COUCHBASE_BUCKET, "ycsb");
     String scopeName = properties.getProperty(COUCHBASE_SCOPE, "_default");
     String collectionName = properties.getProperty(COUCHBASE_COLLECTION, "_default");
     boolean sslMode = properties.getProperty(COUCHBASE_SSL_MODE, "false").equals("true");
     boolean debug = getProperties().getProperty("couchbase.debug", "false").equals("true");
+    keySpace = bucketName + "." + scopeName + "." + collectionName;
 
     if (debug) {
       LOGGER.setLevel(Level.DEBUG);
-    }
-
-    boolean nativeCodec = getProperties().getProperty("couchbase.codec", "ycsb").equals("native");
-
-    if (nativeCodec) {
-      transcoder = RawJsonTranscoder.INSTANCE;
-      contentType = String.class;
-    } else {
-      transcoder = MapTranscoder.INSTANCE;
-      contentType = Map.class;
     }
 
     durability =
@@ -143,7 +131,7 @@ public class Couchbase3Client extends DB {
     maxParallelism = Integer.parseInt(properties.getProperty("couchbase.maxParallelism", "0"));
     int kvEndpoints = Integer.parseInt(properties.getProperty("couchbase.kvEndpoints", "4"));
 
-    long kvTimeout = Long.parseLong(properties.getProperty("couchbase.kvTimeout", "5"));
+    long kvTimeout = Long.parseLong(properties.getProperty("couchbase.kvTimeout", "10"));
     long connectTimeout = Long.parseLong(properties.getProperty("couchbase.connectTimeout", "5"));
     long queryTimeout = Long.parseLong(properties.getProperty("couchbase.queryTimeout", "75"));
 
@@ -204,6 +192,7 @@ public class Couchbase3Client extends DB {
               ClusterOptions.clusterOptions(authenticator).environment(environment));
           bucket = cluster.bucket(bucketName);
           collection = bucket.scope(scopeName).collection(collectionName);
+          reactiveCollection = collection.reactive();
         }
       } catch(Exception e) {
         logError(e, connectString);
@@ -216,8 +205,6 @@ public class Couchbase3Client extends DB {
 
   private void logError(Exception error, String connectString) {
     LOGGER.error(String.format("Connection string: %s", connectString));
-    LOGGER.error(cluster.environment().toString());
-    LOGGER.error(cluster.diagnostics().endpoints().toString());
     LOGGER.error(error.getMessage(), error);
   }
 
@@ -272,8 +259,7 @@ public class Couchbase3Client extends DB {
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     try {
-      Object r = retryBlock(() -> collection.get(key, getOptions().transcoder(transcoder))
-          .contentAs(contentType));
+      JsonObject r = collection.get(key).contentAsObject();
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug(r.toString());
       }
@@ -320,16 +306,14 @@ public class Couchbase3Client extends DB {
   @Override
   public Status update(final String table, final String key, final Map<String, ByteIterator> values) {
     try {
-      return retryBlock(() -> {
-        if (arrayMode) {
-          upsertArray(key, arrayKey, encode(values));
-        } else {
-          collection.upsert(key, values,
-              upsertOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability)
-                  .transcoder(MapTranscoder.INSTANCE));
-        }
-        return Status.OK;
-      });
+      if (arrayMode) {
+        upsertArray(key, arrayKey, encode(values));
+      } else {
+        collection.upsert(key, values,
+            upsertOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability)
+                .transcoder(MapTranscoder.INSTANCE));
+      }
+      return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
@@ -345,16 +329,14 @@ public class Couchbase3Client extends DB {
   @Override
   public Status insert(final String table, final String key, final Map<String, ByteIterator> values) {
     try {
-      return retryBlock(() -> {
-        if (arrayMode) {
-          insertArray(key, arrayKey, encode(values));
-        } else {
-          collection.upsert(key, values,
-              upsertOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability)
-                  .transcoder(MapTranscoder.INSTANCE));
-        }
-        return Status.OK;
-      });
+      if (arrayMode) {
+        insertArray(key, arrayKey, encode(values));
+      } else {
+        collection.upsert(key, values,
+            upsertOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability)
+                .transcoder(MapTranscoder.INSTANCE));
+      }
+      return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
@@ -383,10 +365,8 @@ public class Couchbase3Client extends DB {
   @Override
   public Status delete(final String table, final String key) {
     try {
-      return retryBlock(() -> {
-        collection.remove(key);
-        return Status.OK;
-      });
+      collection.remove(key);
+      return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("delete transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
@@ -404,35 +384,25 @@ public class Couchbase3Client extends DB {
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
-    Vector<Object> results = new Vector<>();
+    final String query = "select raw meta().id from " + keySpace + " where meta().id >= \"$1\" limit $2;";
     try {
-      return retryBlock(() -> {
-        final String query = "select raw meta().id from `" + bucketName + "` where meta().id >= \"$1\" limit $2;";
-        cluster.reactive().query(query, queryOptions()
-                .pipelineBatch(128)
-                .pipelineCap(1024)
-                .scanCap(1024)
-                .readonly(true)
-                .adhoc(adhoc)
-                .maxParallelism(maxParallelism)
-                .retryStrategy(FailFastRetryStrategy.INSTANCE)
-                .parameters(JsonArray.from(startkey, recordcount)))
-            .flatMapMany(res -> res.rowsAs(String.class).parallel())
-            .parallel()
-            .subscribe(
-                next -> results.add(collection.get(next, getOptions().transcoder(transcoder))
-                    .contentAs(contentType)),
-                error ->
-                {
-                  LOGGER.debug(error.getMessage(), error);
-                  throw new RuntimeException(error);
-                }
-            );
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Scanned {} records", results.size());
-        }
-        return Status.OK;
-      });
+      List<JsonObject> results = cluster.reactive().query(query, queryOptions()
+              .pipelineBatch(128)
+              .pipelineCap(1024)
+              .scanCap(1024)
+              .readonly(true)
+              .adhoc(adhoc)
+              .maxParallelism(maxParallelism)
+              .parameters(JsonArray.from(startkey, recordcount)))
+          .flatMapMany(res -> res.rowsAs(String.class))
+          .flatMap(reactiveCollection::get)
+          .map(GetResult::contentAsObject)
+          .collectList()
+          .block();
+      if (LOGGER.isDebugEnabled() && results != null) {
+        LOGGER.debug("Scanned {} records", results.size());
+      }
+      return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("scan transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
