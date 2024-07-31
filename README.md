@@ -1,4 +1,4 @@
-# Couchbase YCSB 2.0.3
+# Couchbase YCSB 2.0.4
 This pacakge is a YCSB implementation to test against a Couchbase cluster. It uses YCSB core 0.18.0 and the Couchbase Java SDK v3.5.
 
 ## Requirements
@@ -15,7 +15,7 @@ for public cloud based DBaaS deployments.
 ### 2. Set up YCSB
 Download the distribution to begin testing.
 ```
-curl -OLs https://github.com/couchbaselabs/ycsb-couchbase/releases/download/2.0.3/ycsb-couchbase.zip
+curl -OLs https://github.com/couchbaselabs/ycsb-couchbase/releases/download/2.0.4/ycsb-couchbase.zip
 ```
 ```
 unzip ycsb-couchbase.zip
@@ -94,11 +94,14 @@ Under normal circumstances you should only need to set the hostname, username, a
 |--------------------------|---------------|-----------------------------------------------------------------------------------|
 | statistics.enable        | false         | Enable statistics collection and reporting                                        |
 | couchbase.hostname       | 127.0.0.1     | Connect hostname or IP address                                                    |
-| couchbase.bucket         | ycsb          | Test bucket                                                                       |
-| couchbase.scope          | _default      | Test scope                                                                        |
-| couchbase.collection     | _default      | Test collection                                                                   |
+| couchbase.bucket         | bench         | Test bucket                                                                       |
+| couchbase.scope          | bench         | Test scope                                                                        |
+| couchbase.collection     | usertable     | Test collection                                                                   |
 | couchbase.username       | Administrator | Database credential username                                                      |
-| couchbase.password       | password      | Database credential password                                                      |
+| couchbase.password       | password      | Database credential password or client cert KeyStore password                     |
+| couchbase.ca.cert        | None          | Path to root CA PEM (cert validation is disabled if a CA isn't provided)          |
+| couchbase.client.cert    | None          | Path to client authentication KeyStore (PKCS12 or JKS format)                     |
+| couchbase.keystore.type  | PKCS12        | KeyStore type when using client certificate auth                                  |
 | couchbase.bucketType     | 0             | Create bucket of type Couchstore (0) or Magma (1)                                 |
 | couchbase.replicaNum     | 1             | Replica number for bucket                                                         |
 | couchbase.project        | test-project  | Capella project name                                                              |

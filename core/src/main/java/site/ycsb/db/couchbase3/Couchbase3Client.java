@@ -24,10 +24,7 @@ import static com.couchbase.client.java.query.QueryOptions.queryOptions;
 
 import ch.qos.logback.classic.Logger;
 import com.couchbase.client.core.deps.io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import com.couchbase.client.core.env.IoConfig;
-import com.couchbase.client.core.env.NetworkResolution;
-import com.couchbase.client.core.env.SecurityConfig;
-import com.couchbase.client.core.env.TimeoutConfig;
+import com.couchbase.client.core.env.*;
 import com.couchbase.client.core.error.DocumentNotFoundException;
 import com.couchbase.client.core.retry.FailFastRetryStrategy;
 import com.couchbase.client.java.*;
@@ -38,8 +35,11 @@ import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Paths;
+import java.security.KeyStore;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -66,6 +66,9 @@ public class Couchbase3Client extends DB {
   public static final String COUCHBASE_HOST = "couchbase.hostname";
   public static final String COUCHBASE_USER = "couchbase.username";
   public static final String COUCHBASE_PASSWORD = "couchbase.password";
+  public static final String COUCHBASE_CLIENT_CERTIFICATE = "couchbase.client.cert";
+  public static final String COUCHBASE_ROOT_CERTIFICATE = "couchbase.ca.cert";
+  public static final String COUCHBASE_KEYSTORE_TYPE = "couchbase.keystore.type";
   public static final String COUCHBASE_SSL_MODE = "couchbase.sslMode";
   public static final String COUCHBASE_BUCKET = "couchbase.bucket";
   public static final String COUCHBASE_SCOPE = "couchbase.scope";
@@ -107,6 +110,9 @@ public class Couchbase3Client extends DB {
     String hostname = properties.getProperty(COUCHBASE_HOST, CouchbaseConnect.DEFAULT_HOSTNAME);
     String username = properties.getProperty(COUCHBASE_USER, CouchbaseConnect.DEFAULT_USER);
     String password = properties.getProperty(COUCHBASE_PASSWORD, CouchbaseConnect.DEFAULT_PASSWORD);
+    String clientCert = properties.getProperty(COUCHBASE_CLIENT_CERTIFICATE);
+    String rootCert = properties.getProperty(COUCHBASE_ROOT_CERTIFICATE);
+    KeyStoreType keyStoreType = KeyStoreType.valueOf(properties.getProperty(COUCHBASE_KEYSTORE_TYPE, "PKCS12").toUpperCase());
     bucketName = properties.getProperty(COUCHBASE_BUCKET, "ycsb");
     String scopeName = properties.getProperty(COUCHBASE_SCOPE, "_default");
     String collectionName = properties.getProperty(COUCHBASE_COLLECTION, "_default");
@@ -154,10 +160,17 @@ public class Couchbase3Client extends DB {
     synchronized (INIT_COORDINATOR) {
       try {
         if (environment == null) {
-          Consumer<SecurityConfig.Builder> secConfiguration = securityConfig -> securityConfig
-              .enableTls(sslMode)
-              .enableHostnameVerification(false)
-              .trustManagerFactory(InsecureTrustManagerFactory.INSTANCE);
+          Consumer<SecurityConfig.Builder> secConfiguration;
+          if (rootCert != null) {
+            secConfiguration = securityConfig -> securityConfig
+                .enableTls(true)
+                .trustCertificate(Paths.get(rootCert));
+          } else {
+            secConfiguration = securityConfig -> securityConfig
+                .enableTls(sslMode)
+                .enableHostnameVerification(false)
+                .trustManagerFactory(InsecureTrustManagerFactory.INSTANCE);
+          }
 
           Consumer<IoConfig.Builder> ioConfiguration = ioConfig -> ioConfig
               .numKvConnections(kvEndpoints)
@@ -169,6 +182,18 @@ public class Couchbase3Client extends DB {
               .connectTimeout(Duration.ofSeconds(connectTimeout))
               .queryTimeout(Duration.ofSeconds(queryTimeout));
 
+          Authenticator authenticator;
+          if (clientCert != null) {
+            KeyStore keyStore = KeyStore.getInstance(keyStoreType.name());
+            keyStore.load(new FileInputStream(clientCert), password.toCharArray());
+            authenticator = CertificateAuthenticator.fromKeyStore(
+                keyStore,
+                password
+            );
+          } else {
+            authenticator = PasswordAuthenticator.create(username, password);
+          }
+
           environment = ClusterEnvironment
               .builder()
               .timeoutConfig(timeOutConfiguration)
@@ -176,12 +201,13 @@ public class Couchbase3Client extends DB {
               .securityConfig(secConfiguration)
               .build();
           cluster = Cluster.connect(connectString,
-              ClusterOptions.clusterOptions(username, password).environment(environment));
+              ClusterOptions.clusterOptions(authenticator).environment(environment));
           bucket = cluster.bucket(bucketName);
           collection = bucket.scope(scopeName).collection(collectionName);
         }
       } catch(Exception e) {
         logError(e, connectString);
+        throw new DBException(e);
       }
     }
 

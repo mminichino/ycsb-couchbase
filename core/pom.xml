@@ -3,7 +3,7 @@
     <parent>
         <groupId>site.ycsb</groupId>
         <artifactId>root</artifactId>
-        <version>2.0.3-5</version>
+        <version>2.0.4-1</version>
     </parent>
 
     <artifactId>core</artifactId>
@@ -42,12 +42,12 @@
         <dependency>
             <groupId>com.couchbase.client</groupId>
             <artifactId>java-client</artifactId>
-            <version>3.6.2</version>
+            <version>3.7.1</version>
         </dependency>
         <dependency>
             <groupId>com.couchbase.client</groupId>
             <artifactId>dcp-client</artifactId>
-            <version>0.50.0</version>
+            <version>0.51.0</version>
         </dependency>
         <dependency>
             <groupId>io.projectreactor</groupId>

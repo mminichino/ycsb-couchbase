@@ -11,6 +11,9 @@ public class CouchbaseTestCleanup extends TestCleanup {
   public static final String CLUSTER_HOST = "couchbase.hostname";
   public static final String CLUSTER_USER = "couchbase.username";
   public static final String CLUSTER_PASSWORD = "couchbase.password";
+  public static final String COUCHBASE_CLIENT_CERTIFICATE = "couchbase.client.cert";
+  public static final String COUCHBASE_ROOT_CERTIFICATE = "couchbase.ca.cert";
+  public static final String COUCHBASE_KEYSTORE_TYPE = "couchbase.keystore.type";
   public static final String CLUSTER_SSL = "couchbase.sslMode";
   public static final String CLUSTER_BUCKET = "couchbase.bucket";
   public static final String CLUSTER_PROJECT = "couchbase.project";
@@ -19,6 +22,8 @@ public class CouchbaseTestCleanup extends TestCleanup {
   public static final String XDCR_HOST = "xdcr.hostname";
   public static final String XDCR_USER = "xdcr.username";
   public static final String XDCR_PASSWORD = "xdcr.password";
+  public static final String XDCR_CLIENT_CERTIFICATE = "couchbase.client.cert";
+  public static final String XDCR_ROOT_CERTIFICATE = "couchbase.ca.cert";
   public static final String XDCR_SSL = "xdcr.sslMode";
   public static final String XDCR_BUCKET = "xdcr.bucket";
   public static final String XDCR_PROJECT = "xdcr.project";
@@ -30,15 +35,21 @@ public class CouchbaseTestCleanup extends TestCleanup {
     String clusterHost = properties.getProperty(CLUSTER_HOST, CouchbaseConnect.DEFAULT_HOSTNAME);
     String clusterUser = properties.getProperty(CLUSTER_USER, CouchbaseConnect.DEFAULT_USER);
     String clusterPassword = properties.getProperty(CLUSTER_PASSWORD, CouchbaseConnect.DEFAULT_PASSWORD);
+    String clientCert = properties.getProperty(COUCHBASE_CLIENT_CERTIFICATE);
+    String rootCert = properties.getProperty(COUCHBASE_ROOT_CERTIFICATE);
     boolean clusterSsl = properties.getProperty(CLUSTER_SSL, CouchbaseConnect.DEFAULT_SSL_SETTING).equals("true");
     String clusterBucket = properties.getProperty(CLUSTER_BUCKET, "ycsb");
     String clusterProject = properties.getProperty(CLUSTER_PROJECT, null);
     String clusterDatabase = properties.getProperty(CLUSTER_DATABASE, null);
     String clusterEventing = properties.getProperty(CLUSTER_EVENTING, null);
 
+    KeyStoreType keyStoreType = KeyStoreType.valueOf(properties.getProperty(COUCHBASE_KEYSTORE_TYPE, "PKCS12").toUpperCase());
+
     String xdcrHost = properties.getProperty(XDCR_HOST, null);
     String xdcrUser = properties.getProperty(XDCR_USER, CouchbaseConnect.DEFAULT_USER);
     String xdcrPassword = properties.getProperty(XDCR_PASSWORD, CouchbaseConnect.DEFAULT_PASSWORD);
+    String xdcrClientCert = properties.getProperty(XDCR_CLIENT_CERTIFICATE);
+    String xdcrRootCert = properties.getProperty(XDCR_ROOT_CERTIFICATE);
     boolean xdcrSsl = properties.getProperty(XDCR_SSL, CouchbaseConnect.DEFAULT_SSL_SETTING).equals("true");
     String xdcrBucket = properties.getProperty(XDCR_BUCKET, "ycsb");
     String xdcrProject = properties.getProperty(XDCR_PROJECT, null);
@@ -50,7 +61,7 @@ public class CouchbaseTestCleanup extends TestCleanup {
     if (xdcrHost != null) {
       replicationClean(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket,
           xdcrHost, xdcrUser, xdcrPassword, xdcrSsl, xdcrBucket);
-      clusterClean(xdcrHost, xdcrUser, xdcrPassword, xdcrSsl, xdcrBucket,
+      clusterClean(xdcrHost, xdcrUser, xdcrPassword, xdcrRootCert, xdcrClientCert, keyStoreType, xdcrSsl, xdcrBucket,
           xdcrProject, xdcrDatabase, xdcrEventing);
     }
 
@@ -58,19 +69,30 @@ public class CouchbaseTestCleanup extends TestCleanup {
       eventingCleanup(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket, clusterEventing);
     }
 
-    clusterClean(clusterHost, clusterUser, clusterPassword, clusterSsl, clusterBucket,
+    clusterClean(clusterHost, clusterUser, clusterPassword, rootCert, clientCert, keyStoreType, clusterSsl, clusterBucket,
         clusterProject, clusterDatabase, clusterEventing);
   }
 
-  private static void clusterClean(String host, String user, String password, boolean ssl, String bucket,
-                                   String project, String database, String eventing) {
+  private static void clusterClean(String host, String user, String password, String rootCert, String clientCert, KeyStoreType keyStoreType,
+                                   boolean ssl, String bucket, String project, String database, String eventing) {
     CouchbaseConnect.CouchbaseBuilder dbBuilder = new CouchbaseConnect.CouchbaseBuilder();
     CouchbaseConnect db;
 
     try {
-      dbBuilder.connect(host, user, password)
+      dbBuilder
+          .host(host)
+          .password(password)
           .ssl(ssl)
           .bucket(bucket);
+      if (rootCert != null) {
+        dbBuilder.rootCert(rootCert);
+      }
+      if (clientCert != null) {
+        dbBuilder.clientKeyStore(clientCert);
+        dbBuilder.keyStoreType(keyStoreType);
+      } else {
+        dbBuilder.user(user);
+      }
       if (project != null && database != null) {
         dbBuilder.capella(project, database);
       }

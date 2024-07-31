@@ -5,19 +5,14 @@
 package site.ycsb.db.couchbase3;
 
 import com.couchbase.client.core.config.AlternateAddress;
-import com.couchbase.client.core.env.IoConfig;
-import com.couchbase.client.core.env.NetworkResolution;
-import com.couchbase.client.core.env.TimeoutConfig;
-import com.couchbase.client.core.error.BucketExistsException;
-import com.couchbase.client.core.error.BucketNotFoundException;
-import com.couchbase.client.core.error.DocumentNotFoundException;
+import com.couchbase.client.core.env.*;
+import com.couchbase.client.core.error.*;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.core.config.PortInfo;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
 import com.couchbase.client.java.codec.RawJsonTranscoder;
 import com.couchbase.client.java.env.ClusterEnvironment;
-import com.couchbase.client.core.env.SecurityConfig;
 import com.couchbase.client.core.deps.io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import com.couchbase.client.java.http.CouchbaseHttpClient;
 import com.couchbase.client.java.http.HttpPath;
@@ -25,6 +20,7 @@ import com.couchbase.client.java.http.HttpResponse;
 import com.couchbase.client.java.http.HttpTarget;
 import com.couchbase.client.java.kv.*;
 import com.couchbase.client.java.manager.bucket.*;
+import com.couchbase.client.java.manager.collection.CollectionManager;
 import com.couchbase.client.java.manager.query.CollectionQueryIndexManager;
 import com.couchbase.client.java.manager.query.CreatePrimaryQueryIndexOptions;
 import com.couchbase.client.java.manager.query.CreateQueryIndexOptions;
@@ -35,6 +31,9 @@ import static com.couchbase.client.java.kv.GetOptions.getOptions;
 import com.google.gson.*;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileInputStream;
+import java.nio.file.Paths;
+import java.security.KeyStore;
 import java.time.Duration;
 import java.util.*;
 import java.util.function.Consumer;
@@ -66,6 +65,9 @@ public final class CouchbaseConnect {
   private final String hostname;
   private final String username;
   private final String password;
+  private final String rootCert;
+  private final String clientCert;
+  private final KeyStoreType keyStoreType;
   private String project;
   private String database;
   private boolean external;
@@ -89,6 +91,9 @@ public final class CouchbaseConnect {
     private String hostName = DEFAULT_HOSTNAME;
     private String userName = DEFAULT_USER;
     private String passWord = DEFAULT_PASSWORD;
+    private String rootCert;
+    private String clientCert;
+    private KeyStoreType keyStoreType = KeyStoreType.PKCS12;
     private Boolean sslMode = DEFAULT_SSL_MODE;
     private String projectName = DEFAULT_PROJECT;
     private String databaseName = DEFAULT_DATABASE;
@@ -132,6 +137,21 @@ public final class CouchbaseConnect {
 
     public CouchbaseBuilder password(final String name) {
       this.passWord = name;
+      return this;
+    }
+
+    public CouchbaseBuilder rootCert(final String name) {
+      this.rootCert = name;
+      return this;
+    }
+
+    public CouchbaseBuilder clientKeyStore(final String name) {
+      this.clientCert = name;
+      return this;
+    }
+
+    public CouchbaseBuilder keyStoreType(final KeyStoreType type) {
+      this.keyStoreType = type;
       return this;
     }
 
@@ -184,6 +204,9 @@ public final class CouchbaseConnect {
     hostname = builder.hostName;
     username = builder.userName;
     password = builder.passWord;
+    rootCert = builder.rootCert;
+    clientCert = builder.clientCert;
+    keyStoreType = builder.keyStoreType;
     useSsl = builder.sslMode;
     project = builder.projectName;
     database = builder.databaseName;
@@ -215,10 +238,17 @@ public final class CouchbaseConnect {
     synchronized (STARTUP_COORDINATOR) {
       try {
         if (environment == null) {
-          Consumer<SecurityConfig.Builder> secConfiguration = securityConfig -> securityConfig
-              .enableTls(useSsl)
-              .enableHostnameVerification(false)
-              .trustManagerFactory(InsecureTrustManagerFactory.INSTANCE);
+          Consumer<SecurityConfig.Builder> secConfiguration;
+          if (rootCert != null) {
+            secConfiguration = securityConfig -> securityConfig
+                .enableTls(true)
+                .trustCertificate(Paths.get(rootCert));
+          } else {
+            secConfiguration = securityConfig -> securityConfig
+                .enableTls(useSsl)
+                .enableHostnameVerification(false)
+                .trustManagerFactory(InsecureTrustManagerFactory.INSTANCE);
+          }
 
           Consumer<IoConfig.Builder> ioConfiguration = ioConfig -> ioConfig
               .numKvConnections(4)
@@ -230,6 +260,18 @@ public final class CouchbaseConnect {
               .connectTimeout(Duration.ofSeconds(15))
               .queryTimeout(Duration.ofSeconds(75));
 
+          Authenticator authenticator;
+          if (clientCert != null) {
+            KeyStore keyStore = KeyStore.getInstance(keyStoreType.name());
+            keyStore.load(new FileInputStream(clientCert), password.toCharArray());
+            authenticator = CertificateAuthenticator.fromKeyStore(
+                keyStore,
+                password
+            );
+          } else {
+            authenticator = PasswordAuthenticator.create(username, password);
+          }
+
           environment = ClusterEnvironment
               .builder()
               .timeoutConfig(timeOutConfiguration)
@@ -237,7 +279,7 @@ public final class CouchbaseConnect {
               .securityConfig(secConfiguration)
               .build();
           cluster = Cluster.connect(connectString,
-              ClusterOptions.clusterOptions(username, password).environment(environment));
+              ClusterOptions.clusterOptions(authenticator).environment(environment));
           cluster.waitUntilReady(Duration.ofSeconds(15));
           bucketMgr = cluster.buckets();
           try {
@@ -310,8 +352,6 @@ public final class CouchbaseConnect {
 
   private void logError(Exception error, String connectString) {
     LOGGER.error(String.format("Connection string: %s", connectString));
-    LOGGER.error(cluster.environment().toString());
-    LOGGER.error(cluster.diagnostics().endpoints().toString());
     LOGGER.error(error.getMessage(), error);
   }
 
@@ -330,6 +370,8 @@ public final class CouchbaseConnect {
     HttpResponse response = cluster.httpClient().get(
             HttpTarget.manager(),
             HttpPath.of("/pools/default"));
+
+    LOGGER.debug(response.contentAsString());
 
     Gson gson = new Gson();
     clusterInfo = gson.fromJson(response.contentAsString(), JsonObject.class);
@@ -405,6 +447,34 @@ public final class CouchbaseConnect {
     }
     Bucket check = cluster.bucket(bucket);
     check.waitUntilReady(Duration.ofSeconds(15));
+  }
+
+  public void createScope(String bucketName, String scopeName) {
+    if (Objects.equals(scopeName, "_default")) {
+      return;
+    }
+    bucketMgr.getBucket(bucketName);
+    bucket = cluster.bucket(bucketName);
+    CollectionManager collectionManager = bucket.collections();
+    try {
+      collectionManager.createScope(scopeName);
+    } catch (ScopeExistsException e) {
+      LOGGER.info(String.format("Scope %s already exists in cluster", scopeName));
+    }
+  }
+
+  public void createCollection(String bucketName, String scopeName, String collectionName) {
+    if (Objects.equals(collectionName, "_default")) {
+      return;
+    }
+    bucketMgr.getBucket(bucketName);
+    bucket = cluster.bucket(bucketName);
+    CollectionManager collectionManager = bucket.collections();
+    try {
+      collectionManager.createCollection(scopeName, collectionName);
+    } catch (CollectionExistsException e) {
+      LOGGER.info(String.format("Collection %s already exists in cluster", collectionName));
+    }
   }
 
   public void dropBucket(String bucket) {
