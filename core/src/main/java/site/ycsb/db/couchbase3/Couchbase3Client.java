@@ -20,6 +20,7 @@ package site.ycsb.db.couchbase3;
 import static com.couchbase.client.java.kv.MutateInOptions.mutateInOptions;
 import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
 import static com.couchbase.client.java.query.QueryOptions.queryOptions;
+import static com.couchbase.client.java.kv.GetOptions.getOptions;
 
 import ch.qos.logback.classic.Logger;
 import com.couchbase.client.core.deps.io.netty.handler.ssl.util.InsecureTrustManagerFactory;
@@ -27,6 +28,8 @@ import com.couchbase.client.core.env.*;
 import com.couchbase.client.core.error.DocumentNotFoundException;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
+import com.couchbase.client.java.codec.RawJsonTranscoder;
+import com.couchbase.client.java.codec.Transcoder;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
@@ -84,6 +87,8 @@ public class Couchbase3Client extends DB {
   private static int ttlSeconds;
   private boolean arrayMode;
   private String arrayKey;
+  private Transcoder transcoder;
+  private Class<?> contentType;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
 
   @Override
@@ -119,6 +124,16 @@ public class Couchbase3Client extends DB {
 
     if (debug) {
       LOGGER.setLevel(Level.DEBUG);
+    }
+
+    boolean nativeCodec = getProperties().getProperty("couchbase.codec", "native").equals("native");
+
+    if (nativeCodec) {
+      transcoder = RawJsonTranscoder.INSTANCE;
+      contentType = String.class;
+    } else {
+      transcoder = MapTranscoder.INSTANCE;
+      contentType = Map.class;
     }
 
     durability =
@@ -204,7 +219,7 @@ public class Couchbase3Client extends DB {
   }
 
   private void logError(Exception error, String connectString) {
-    LOGGER.error(String.format("Connection string: %s", connectString));
+    LOGGER.error("Connection string: {}", connectString);
     LOGGER.error(error.getMessage(), error);
   }
 
@@ -259,7 +274,7 @@ public class Couchbase3Client extends DB {
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     try {
-      JsonObject r = collection.get(key).contentAsObject();
+      Object r = collection.get(key, getOptions().transcoder(transcoder)).contentAs(contentType);
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug(r.toString());
       }
@@ -310,7 +325,8 @@ public class Couchbase3Client extends DB {
         upsertArray(key, arrayKey, encode(values));
       } else {
         collection.upsert(key, values,
-            upsertOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability)
+            upsertOptions().expiry(Duration.ofSeconds(ttlSeconds))
+                .durability(durability)
                 .transcoder(MapTranscoder.INSTANCE));
       }
       return Status.OK;
@@ -333,7 +349,8 @@ public class Couchbase3Client extends DB {
         insertArray(key, arrayKey, encode(values));
       } else {
         collection.upsert(key, values,
-            upsertOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability)
+            upsertOptions().expiry(Duration.ofSeconds(ttlSeconds))
+                .durability(durability)
                 .transcoder(MapTranscoder.INSTANCE));
       }
       return Status.OK;
@@ -394,8 +411,10 @@ public class Couchbase3Client extends DB {
               .adhoc(adhoc)
               .maxParallelism(maxParallelism)
               .parameters(JsonArray.from(startkey, recordcount)))
-          .flatMapMany(res -> res.rowsAs(String.class))
+          .flatMapMany(res -> res.rowsAs(String.class).parallel())
+          .parallel()
           .flatMap(reactiveCollection::get)
+          .sequential()
           .map(GetResult::contentAsObject)
           .collectList()
           .block();
