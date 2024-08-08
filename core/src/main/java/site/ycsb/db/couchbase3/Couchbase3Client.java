@@ -147,7 +147,7 @@ public class Couchbase3Client extends DB {
     int kvEndpoints = Integer.parseInt(properties.getProperty("couchbase.kvEndpoints", "4"));
 
     long kvTimeout = Long.parseLong(properties.getProperty("couchbase.kvTimeout", "10"));
-    long connectTimeout = Long.parseLong(properties.getProperty("couchbase.connectTimeout", "5"));
+    long connectTimeout = Long.parseLong(properties.getProperty("couchbase.connectTimeout", "10"));
     long queryTimeout = Long.parseLong(properties.getProperty("couchbase.queryTimeout", "75"));
 
     ttlSeconds = Integer.parseInt(properties.getProperty("couchbase.ttlSeconds", "0"));
@@ -206,6 +206,7 @@ public class Couchbase3Client extends DB {
           cluster = Cluster.connect(connectString,
               ClusterOptions.clusterOptions(authenticator).environment(environment));
           bucket = cluster.bucket(bucketName);
+          bucket.waitUntilReady(Duration.ofSeconds(5));
           collection = bucket.scope(scopeName).collection(collectionName);
           reactiveCollection = collection.reactive();
         }
@@ -403,23 +404,23 @@ public class Couchbase3Client extends DB {
                      final Vector<HashMap<String, ByteIterator>> result) {
     final String query = "select raw meta().id from " + keySpace + " where meta().id >= \"$1\" limit $2;";
     try {
-      List<JsonObject> results = cluster.reactive().query(query, queryOptions()
-              .pipelineBatch(128)
+      List<JsonObject> data = cluster.reactive().query(query, queryOptions()
+              .pipelineBatch(256)
               .pipelineCap(1024)
               .scanCap(1024)
+              .maxParallelism(maxParallelism)
               .readonly(true)
               .adhoc(adhoc)
-              .maxParallelism(maxParallelism)
               .parameters(JsonArray.from(startkey, recordcount)))
-          .flatMapMany(res -> res.rowsAs(String.class).parallel())
+          .flatMapMany(res -> res.rowsAs(String.class))
           .parallel()
           .flatMap(reactiveCollection::get)
-          .sequential()
           .map(GetResult::contentAsObject)
+          .sequential()
           .collectList()
           .block();
-      if (LOGGER.isDebugEnabled() && results != null) {
-        LOGGER.debug("Scanned {} records", results.size());
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Scanned {} records", data != null ? data.size(): 0);
       }
       return Status.OK;
     } catch (Throwable t) {
