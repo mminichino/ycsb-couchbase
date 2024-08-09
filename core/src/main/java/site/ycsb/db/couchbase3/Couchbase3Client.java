@@ -41,7 +41,6 @@ import java.nio.file.Paths;
 import java.security.KeyStore;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -241,30 +240,6 @@ public class Couchbase3Client extends DB {
   public synchronized void cleanup() {
   }
 
-  private static <T>T retryBlock(Callable<T> block) throws Exception {
-    int retryCount = 10;
-    long waitFactor = 100L;
-    for (int retryNumber = 1; retryNumber <= retryCount; retryNumber++) {
-      try {
-        return block.call();
-      } catch (Exception e) {
-        LOGGER.debug("Retry count: {} error: {}", retryCount, e.getMessage(), e);
-        if (retryNumber == retryCount) {
-          throw e;
-        } else {
-          double factor = waitFactor * retryNumber;
-          long wait = (long) factor;
-          try {
-            Thread.sleep(wait);
-          } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-          }
-        }
-      }
-    }
-    return block.call();
-  }
-
   /**
    * Perform key/value read ("get").
    * @param table The name of the table.
@@ -402,7 +377,7 @@ public class Couchbase3Client extends DB {
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
-    final String query = "select raw meta().id from " + keySpace + " where meta().id >= \"$1\" LIMIT $2;";
+    final String query = "SELECT RAW meta().id FROM " + keySpace + " WHERE meta().id >= \"$1\" ORDER BY meta().id LIMIT $2;";
     try {
       List<JsonObject> data = cluster.reactive().query(query, queryOptions()
               .pipelineBatch(256)
