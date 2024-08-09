@@ -508,15 +508,14 @@ public final class CouchbaseConnect {
     }
   }
 
-  public void createPrimaryIndex() {
-    int replicaCount = getIndexReplicaCount();
-    if (collection == null) {
-      connectKeyspace();
-    }
+  public void createPrimaryIndex(String bucketName, String scopeName, String collectionName, int replicas) {
+    Bucket bucket = cluster.bucket(bucketName);
+    Scope scope = bucket.scope(scopeName);
+    Collection collection = scope.collection(collectionName);
     CollectionQueryIndexManager queryIndexMgr = collection.queryIndexes();
     CreatePrimaryQueryIndexOptions options = CreatePrimaryQueryIndexOptions.createPrimaryQueryIndexOptions()
         .deferred(false)
-        .numReplicas(replicaCount)
+        .numReplicas(replicas)
         .ignoreIfExists(true);
     queryIndexMgr.createPrimaryIndex(options);
   }

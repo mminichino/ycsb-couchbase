@@ -134,8 +134,8 @@ public class CouchbaseTestSetup extends TestSetup {
       System.err.printf("Creating collection %s\n", collection);
       db.createCollection(bucket, scope, collection);
       if (index) {
-        System.err.printf("Creating index on field %s\n", field);
-        db.createFieldIndex(bucket, scope, collection, field);
+        System.err.printf("Creating primary index on %s\n", collection);
+        db.createPrimaryIndex(bucket, scope, collection, replicas);
       }
       db.disconnect();
     } catch (Exception e) {

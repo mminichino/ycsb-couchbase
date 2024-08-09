@@ -82,13 +82,13 @@ public class Couchbase3Client extends DB {
   private static volatile ReactiveCollection reactiveCollection;
   private static volatile ClusterEnvironment environment;
   private static String keySpace;
-  private boolean adhoc;
-  private int maxParallelism;
+  private static boolean adhoc;
+  private static int maxParallelism;
   private static int ttlSeconds;
-  private boolean arrayMode;
-  private String arrayKey;
-  private Transcoder transcoder;
-  private Class<?> contentType;
+  private static boolean arrayMode;
+  private static String arrayKey;
+  private static Transcoder transcoder;
+  private static Class<?> contentType;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
 
   @Override
@@ -144,7 +144,7 @@ public class Couchbase3Client extends DB {
 
     adhoc = properties.getProperty("couchbase.adhoc", "false").equals("true");
     maxParallelism = Integer.parseInt(properties.getProperty("couchbase.maxParallelism", "0"));
-    int kvEndpoints = Integer.parseInt(properties.getProperty("couchbase.kvEndpoints", "4"));
+    int kvEndpoints = Integer.parseInt(properties.getProperty("couchbase.kvEndpoints", "8"));
 
     long kvTimeout = Long.parseLong(properties.getProperty("couchbase.kvTimeout", "10"));
     long connectTimeout = Long.parseLong(properties.getProperty("couchbase.connectTimeout", "10"));
@@ -402,7 +402,7 @@ public class Couchbase3Client extends DB {
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
-    final String query = "select raw meta().id from " + keySpace + " where meta().id >= \"$1\" limit $2;";
+    final String query = "select raw meta().id from " + keySpace + " where meta().id >= \"$1\" LIMIT $2;";
     try {
       List<JsonObject> data = cluster.reactive().query(query, queryOptions()
               .pipelineBatch(256)
