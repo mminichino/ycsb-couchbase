@@ -530,13 +530,31 @@ public final class CouchbaseConnect {
     }
     CollectionQueryIndexManager queryIndexMgr = collection.queryIndexes();
     CreateQueryIndexOptions options = CreateQueryIndexOptions.createQueryIndexOptions()
-
         .deferred(false)
         .numReplicas(replicaCount)
         .ignoreIfExists(true);
 
     String indexName = "idx_" + field.replaceAll("\\(\\).", "");
     queryIndexMgr.createIndex(indexName, Collections.singletonList(field), options);
+    queryIndexMgr.watchIndexes(Collections.singletonList(indexName), Duration.ofSeconds(10));
+  }
+
+  public void createSecondaryIndex(String bucketName, String scopeName, String collectionName,
+                                   String indexName, List<String> indexKeys) {
+    Bucket bucket = cluster.bucket(bucketName);
+    Scope scope = bucket.scope(scopeName);
+    Collection collection = scope.collection(collectionName);
+    int replicaCount = getIndexReplicaCount();
+    if (collection == null) {
+      throw new RuntimeException("Collection is not connected");
+    }
+    CollectionQueryIndexManager queryIndexMgr = collection.queryIndexes();
+    CreateQueryIndexOptions options = CreateQueryIndexOptions.createQueryIndexOptions()
+        .deferred(false)
+        .numReplicas(replicaCount)
+        .ignoreIfExists(true);
+
+    queryIndexMgr.createIndex(indexName, indexKeys, options);
     queryIndexMgr.watchIndexes(Collections.singletonList(indexName), Duration.ofSeconds(10));
   }
 

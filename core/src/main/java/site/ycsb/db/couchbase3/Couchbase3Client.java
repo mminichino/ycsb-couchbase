@@ -46,7 +46,7 @@ import java.util.function.Consumer;
 
 import com.couchbase.client.java.json.JsonArray;
 import com.couchbase.client.java.json.JsonObject;
-import com.couchbase.client.java.kv.GetResult;
+import com.couchbase.client.java.query.ReactiveQueryResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -73,15 +73,20 @@ public class Couchbase3Client extends DB {
   public static final String COUCHBASE_BUCKET = "couchbase.bucket";
   public static final String COUCHBASE_SCOPE = "couchbase.scope";
   public static final String COUCHBASE_COLLECTION = "couchbase.collection";
+  public static final String INDEX_CREATE = "index.create";
+  public static final String INDEX_CREATE_DEFAULT = "false";
+  public static final String FIELD_COUNT_PROPERTY = "fieldcount";
+  public static final String FIELD_COUNT_PROPERTY_DEFAULT = "10";
   private static final AtomicInteger OPEN_CLIENTS = new AtomicInteger(0);
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Cluster cluster;
   private static volatile Bucket bucket;
   private static volatile Collection collection;
-  private static volatile ReactiveCollection reactiveCollection;
   private static volatile ClusterEnvironment environment;
   private static String keySpace;
   private static boolean adhoc;
+  private static boolean indexCreate;
+  private static String allFields;
   private static int maxParallelism;
   private static int ttlSeconds;
   private static boolean arrayMode;
@@ -151,6 +156,17 @@ public class Couchbase3Client extends DB {
 
     ttlSeconds = Integer.parseInt(properties.getProperty("couchbase.ttlSeconds", "0"));
 
+    indexCreate = properties.getProperty(INDEX_CREATE, INDEX_CREATE_DEFAULT).equals("true");
+    int fieldCount = Integer.parseInt(properties.getProperty(FIELD_COUNT_PROPERTY, FIELD_COUNT_PROPERTY_DEFAULT));
+
+    StringBuilder fieldBuilder = new StringBuilder();
+    fieldBuilder.append("id");
+    for (int idx = 0; idx < fieldCount; idx++) {
+      fieldBuilder.append(",field");
+      fieldBuilder.append(idx);
+    }
+    allFields = fieldBuilder.toString();
+
     if (sslMode) {
       couchbasePrefix = "couchbases://";
     } else {
@@ -207,7 +223,6 @@ public class Couchbase3Client extends DB {
           bucket = cluster.bucket(bucketName);
           bucket.waitUntilReady(Duration.ofSeconds(5));
           collection = bucket.scope(scopeName).collection(collectionName);
-          reactiveCollection = collection.reactive();
         }
       } catch(Exception e) {
         logError(e, connectString);
@@ -296,6 +311,9 @@ public class Couchbase3Client extends DB {
    */
   @Override
   public Status update(final String table, final String key, final Map<String, ByteIterator> values) {
+    if (indexCreate) {
+      values.put("id", new StringByteIterator(key));
+    }
     try {
       if (arrayMode) {
         upsertArray(key, arrayKey, encode(values));
@@ -320,6 +338,9 @@ public class Couchbase3Client extends DB {
    */
   @Override
   public Status insert(final String table, final String key, final Map<String, ByteIterator> values) {
+    if (indexCreate) {
+      values.put("id", new StringByteIterator(key));
+    }
     try {
       if (arrayMode) {
         insertArray(key, arrayKey, encode(values));
@@ -377,7 +398,7 @@ public class Couchbase3Client extends DB {
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
-    final String query = "SELECT RAW meta().id FROM " + keySpace + " WHERE meta().id >= \"$1\" ORDER BY meta().id LIMIT $2;";
+    final String query = "SELECT " + allFields + " FROM " + keySpace + " WHERE id >= \"$1\" LIMIT $2;";
     try {
       List<JsonObject> data = cluster.reactive().query(query, queryOptions()
               .pipelineBatch(256)
@@ -387,11 +408,7 @@ public class Couchbase3Client extends DB {
               .readonly(true)
               .adhoc(adhoc)
               .parameters(JsonArray.from(startkey, recordcount)))
-          .flatMapMany(res -> res.rowsAs(String.class))
-          .parallel()
-          .flatMap(reactiveCollection::get)
-          .map(GetResult::contentAsObject)
-          .sequential()
+          .flatMapMany(ReactiveQueryResult::rowsAsObject)
           .collectList()
           .block();
       if (LOGGER.isDebugEnabled()) {

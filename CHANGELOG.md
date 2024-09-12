@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.5]
+
+### Added
+
+- Nothing was added in this release
+
+### Changed
+
+- Changed scan logic
+- Updated Couchbase SDK driver revision to current
+
+### Fixed
+
+- No bug fixes in this release
+
+### Removed
+
+- Nothing was removed in this release
+
 ## [2.0.4]
 
 ### Added
