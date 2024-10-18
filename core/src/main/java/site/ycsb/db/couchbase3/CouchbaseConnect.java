@@ -4,53 +4,36 @@
 
 package site.ycsb.db.couchbase3;
 
-import ch.qos.logback.classic.Logger;
 import com.couchbase.client.core.config.AlternateAddress;
-import com.couchbase.client.core.env.IoConfig;
-import com.couchbase.client.core.env.NetworkResolution;
-import com.couchbase.client.core.env.TimeoutConfig;
-import com.couchbase.client.core.error.BucketExistsException;
-import com.couchbase.client.core.error.BucketNotFoundException;
-import com.couchbase.client.core.error.DocumentNotFoundException;
-import com.couchbase.client.core.error.ScopeExistsException;
-import com.couchbase.client.core.error.CollectionExistsException;
+import com.couchbase.client.core.env.*;
+import com.couchbase.client.core.error.*;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.core.config.PortInfo;
-import com.couchbase.client.core.retry.FailFastRetryStrategy;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
 import com.couchbase.client.java.codec.RawJsonTranscoder;
-import com.couchbase.client.java.codec.TypeRef;
 import com.couchbase.client.java.env.ClusterEnvironment;
-import com.couchbase.client.core.env.SecurityConfig;
 import com.couchbase.client.core.deps.io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import com.couchbase.client.java.http.*;
+import com.couchbase.client.java.http.CouchbaseHttpClient;
+import com.couchbase.client.java.http.HttpPath;
+import com.couchbase.client.java.http.HttpResponse;
+import com.couchbase.client.java.http.HttpTarget;
 import com.couchbase.client.java.kv.*;
-import com.couchbase.client.java.manager.analytics.AnalyticsDataType;
 import com.couchbase.client.java.manager.bucket.*;
 import com.couchbase.client.java.manager.collection.CollectionManager;
 import com.couchbase.client.java.manager.query.CollectionQueryIndexManager;
 import com.couchbase.client.java.manager.query.CreatePrimaryQueryIndexOptions;
 import com.couchbase.client.java.manager.query.CreateQueryIndexOptions;
-import com.couchbase.client.java.manager.analytics.AnalyticsIndexManager;
-import com.couchbase.client.java.analytics.AnalyticsResult;
-import static com.couchbase.client.java.manager.analytics.CreateDatasetAnalyticsOptions.createDatasetAnalyticsOptions;
-import static com.couchbase.client.java.manager.analytics.DropDatasetAnalyticsOptions.dropDatasetAnalyticsOptions;
-import static com.couchbase.client.java.manager.analytics.CreateIndexAnalyticsOptions.createIndexAnalyticsOptions;
-import static com.couchbase.client.java.manager.analytics.DropIndexAnalyticsOptions.dropIndexAnalyticsOptions;
-import static com.couchbase.client.java.analytics.AnalyticsOptions.analyticsOptions;
-import static com.couchbase.client.java.query.QueryOptions.queryOptions;
 import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
 import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
 import static com.couchbase.client.java.kv.MutateInOptions.mutateInOptions;
 import static com.couchbase.client.java.kv.GetOptions.getOptions;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.gson.*;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileInputStream;
+import java.nio.file.Paths;
+import java.security.KeyStore;
 import java.time.Duration;
 import java.util.*;
 import java.util.function.Consumer;
@@ -61,15 +44,14 @@ import java.util.stream.Stream;
  * Couchbase Connection Utility.
  */
 public final class CouchbaseConnect {
-  private static final Logger LOGGER =
-      (Logger) LoggerFactory.getLogger("site.ycsb.db.couchbase3.CouchbaseConnect");
+  private static final ch.qos.logback.classic.Logger LOGGER =
+      (ch.qos.logback.classic.Logger) LoggerFactory.getLogger("site.ycsb.db.couchbase3.CouchbaseConnect");
   private volatile Cluster cluster;
   private volatile Bucket bucket;
   private volatile Scope scope;
   private volatile Collection collection;
   private volatile ClusterEnvironment environment;
   private volatile BucketManager bucketMgr;
-  private volatile AnalyticsIndexManager analytics;
   public static final String DEFAULT_USER = "Administrator";
   public static final String DEFAULT_PASSWORD = "password";
   public static final String DEFAULT_HOSTNAME = "127.0.0.1";
@@ -83,6 +65,9 @@ public final class CouchbaseConnect {
   private final String hostname;
   private final String username;
   private final String password;
+  private final String rootCert;
+  private final String clientCert;
+  private final KeyStoreType keyStoreType;
   private String project;
   private String database;
   private boolean external;
@@ -96,11 +81,8 @@ public final class CouchbaseConnect {
   private JsonObject clusterInfo = new JsonObject();
   private final boolean scopeEnabled;
   private final boolean collectionEnabled;
-  private boolean analyticsEnabled;
-  private boolean columnar;
   private final DurabilityLevel durability;
   private final int ttlSeconds;
-  private boolean communityEdition = false;
 
   /**
    * Builder Class.
@@ -109,13 +91,15 @@ public final class CouchbaseConnect {
     private String hostName = DEFAULT_HOSTNAME;
     private String userName = DEFAULT_USER;
     private String passWord = DEFAULT_PASSWORD;
+    private String rootCert;
+    private String clientCert;
+    private KeyStoreType keyStoreType = KeyStoreType.PKCS12;
     private Boolean sslMode = DEFAULT_SSL_MODE;
     private String projectName = DEFAULT_PROJECT;
     private String databaseName = DEFAULT_DATABASE;
     private String bucketName;
     private String scopeName = DEFAULT_SCOPE;
     private String collectionName = DEFAULT_COLLECTION;
-    private boolean columnar = false;
     private int ttlSeconds = 0;
     private DurabilityLevel durabilityLevel = DurabilityLevel.NONE;
 
@@ -156,6 +140,21 @@ public final class CouchbaseConnect {
       return this;
     }
 
+    public CouchbaseBuilder rootCert(final String name) {
+      this.rootCert = name;
+      return this;
+    }
+
+    public CouchbaseBuilder clientKeyStore(final String name) {
+      this.clientCert = name;
+      return this;
+    }
+
+    public CouchbaseBuilder keyStoreType(final KeyStoreType type) {
+      this.keyStoreType = type;
+      return this;
+    }
+
     public CouchbaseBuilder connect(final String host, final String user, final String password) {
       this.hostName = host;
       this.userName = user;
@@ -189,11 +188,6 @@ public final class CouchbaseConnect {
       return this;
     }
 
-    public CouchbaseBuilder columnar(final boolean columnar) {
-      this.columnar = columnar;
-      return this;
-    }
-
     public CouchbaseBuilder keyspace(final String bucket, final String scope, final String collection) {
       this.bucketName = bucket;
       this.scopeName = scope;
@@ -210,6 +204,9 @@ public final class CouchbaseConnect {
     hostname = builder.hostName;
     username = builder.userName;
     password = builder.passWord;
+    rootCert = builder.rootCert;
+    clientCert = builder.clientCert;
+    keyStoreType = builder.keyStoreType;
     useSsl = builder.sslMode;
     project = builder.projectName;
     database = builder.databaseName;
@@ -218,10 +215,8 @@ public final class CouchbaseConnect {
     bucketName = builder.bucketName;
     scopeName = builder.scopeName;
     collectionName = builder.collectionName;
-    columnar = builder.columnar;
     scopeEnabled = !Objects.equals(scopeName, "_default");
     collectionEnabled = !Objects.equals(collectionName, "_default");
-    analyticsEnabled = false;
     connect();
   }
 
@@ -243,10 +238,17 @@ public final class CouchbaseConnect {
     synchronized (STARTUP_COORDINATOR) {
       try {
         if (environment == null) {
-          Consumer<SecurityConfig.Builder> secConfiguration = securityConfig -> securityConfig
-              .enableTls(useSsl)
-              .enableHostnameVerification(false)
-              .trustManagerFactory(InsecureTrustManagerFactory.INSTANCE);
+          Consumer<SecurityConfig.Builder> secConfiguration;
+          if (rootCert != null) {
+            secConfiguration = securityConfig -> securityConfig
+                .enableTls(true)
+                .trustCertificate(Paths.get(rootCert));
+          } else {
+            secConfiguration = securityConfig -> securityConfig
+                .enableTls(useSsl)
+                .enableHostnameVerification(false)
+                .trustManagerFactory(InsecureTrustManagerFactory.INSTANCE);
+          }
 
           Consumer<IoConfig.Builder> ioConfiguration = ioConfig -> ioConfig
               .numKvConnections(4)
@@ -256,8 +258,19 @@ public final class CouchbaseConnect {
           Consumer<TimeoutConfig.Builder> timeOutConfiguration = timeoutConfig -> timeoutConfig
               .kvTimeout(Duration.ofSeconds(5))
               .connectTimeout(Duration.ofSeconds(15))
-              .analyticsTimeout(Duration.ofSeconds(360))
               .queryTimeout(Duration.ofSeconds(75));
+
+          Authenticator authenticator;
+          if (clientCert != null) {
+            KeyStore keyStore = KeyStore.getInstance(keyStoreType.name());
+            keyStore.load(new FileInputStream(clientCert), password.toCharArray());
+            authenticator = CertificateAuthenticator.fromKeyStore(
+                keyStore,
+                password
+            );
+          } else {
+            authenticator = PasswordAuthenticator.create(username, password);
+          }
 
           environment = ClusterEnvironment
               .builder()
@@ -266,19 +279,16 @@ public final class CouchbaseConnect {
               .securityConfig(secConfiguration)
               .build();
           cluster = Cluster.connect(connectString,
-              ClusterOptions.clusterOptions(username, password).environment(environment));
+              ClusterOptions.clusterOptions(authenticator).environment(environment));
           cluster.waitUntilReady(Duration.ofSeconds(15));
-          if (!columnar) {
-            bucketMgr = cluster.buckets();
-            try {
-              if (bucketName != null) {
-                bucketMgr.getBucket(bucketName);
-                bucket = cluster.bucket(bucketName);
-              }
-            } catch (BucketNotFoundException ignored) {
+          bucketMgr = cluster.buckets();
+          try {
+            if (bucketName != null) {
+              bucketMgr.getBucket(bucketName);
+              bucket = cluster.bucket(bucketName);
             }
-            getClusterInfo();
-          }
+          } catch (BucketNotFoundException ignored) { }
+          getClusterInfo();
         }
       } catch(Exception e) {
         logError(e, connectString);
@@ -342,8 +352,6 @@ public final class CouchbaseConnect {
 
   private void logError(Exception error, String connectString) {
     LOGGER.error(String.format("Connection string: %s", connectString));
-    LOGGER.error(cluster.environment().toString());
-    LOGGER.error(cluster.diagnostics().endpoints().toString());
     LOGGER.error(error.getMessage(), error);
   }
 
@@ -363,10 +371,10 @@ public final class CouchbaseConnect {
             HttpTarget.manager(),
             HttpPath.of("/pools/default"));
 
+    LOGGER.debug(response.contentAsString());
+
     Gson gson = new Gson();
     clusterInfo = gson.fromJson(response.contentAsString(), JsonObject.class);
-
-    communityEdition = !clusterInfo.has("cbasMemoryQuota");
 
     for (JsonElement node : clusterInfo.getAsJsonArray("nodes").asList()) {
       String hostEntry = node.getAsJsonObject().get("hostname").getAsString();
@@ -377,11 +385,6 @@ public final class CouchbaseConnect {
       JsonObject entry = new JsonObject();
       entry.addProperty("hostname", hostname);
       entry.add("services", services);
-      boolean result = services.asList().stream().anyMatch(e -> e.getAsString().equals("cbas"));
-      if (result) {
-        analyticsEnabled = true;
-        analytics = new AnalyticsIndexManager(cluster);
-      }
 
       hostMap.add(entry);
     }
@@ -446,33 +449,6 @@ public final class CouchbaseConnect {
     check.waitUntilReady(Duration.ofSeconds(15));
   }
 
-  public void createAnalyticsCollection(String bucketName) {
-    analytics.createDataset(bucketName, bucketName, createDatasetAnalyticsOptions().ignoreIfExists(true));
-  }
-
-  public void dropAnalyticsCollection(String bucketName) {
-    analytics.dropDataset(bucketName, dropDatasetAnalyticsOptions().ignoreIfNotExists(true));
-  }
-
-  public void createAnalyticsIntIndex(String bucketName, String fieldName) {
-    Map<String,AnalyticsDataType> fieldMap = new HashMap<>();
-    fieldMap.put(fieldName, AnalyticsDataType.INT64);
-    String indexName = bucketName + "_" + fieldName + "_idx";
-    analytics.createIndex(indexName, bucketName, fieldMap, createIndexAnalyticsOptions().ignoreIfExists(true));
-  }
-
-  public void createAnalyticsStrIndex(String bucketName, String fieldName) {
-    Map<String,AnalyticsDataType> fieldMap = new HashMap<>();
-    fieldMap.put(fieldName, AnalyticsDataType.STRING);
-    String indexName = bucketName + "_" + fieldName + "_idx";
-    analytics.createIndex(indexName, bucketName, fieldMap, createIndexAnalyticsOptions().ignoreIfExists(true));
-  }
-
-  public void dropAnalyticsIndex(String bucketName, String fieldName) {
-    String indexName = bucketName + "_" + fieldName + "_idx";
-    analytics.dropIndex(indexName, bucketName, dropIndexAnalyticsOptions().ignoreIfNotExists(true));
-  }
-
   public void createScope(String bucketName, String scopeName) {
     if (Objects.equals(scopeName, "_default")) {
       return;
@@ -501,10 +477,6 @@ public final class CouchbaseConnect {
     }
   }
 
-  public boolean isAnalyticsEnabled() {
-    return analyticsEnabled;
-  }
-
   public void dropBucket(String bucket) {
     if (project != null && database != null) {
       CouchbaseCapella capella = new CouchbaseCapella(project, database);
@@ -529,32 +501,32 @@ public final class CouchbaseConnect {
 
   public int getIndexReplicaCount() {
     int indexNodes = (int) getIndexNodeCount();
-    if (communityEdition) {
-      return 0;
-    } else if (indexNodes <= 4) {
+    if (indexNodes <= 4) {
       return indexNodes - 1;
     } else {
       return 3;
     }
   }
 
-  public void createPrimaryIndex() {
-    int replicaCount = getIndexReplicaCount();
-    if (collection == null) {
-      connectKeyspace();
-    }
+  public void createPrimaryIndex(String bucketName, String scopeName, String collectionName, int replicas) {
+    Bucket bucket = cluster.bucket(bucketName);
+    Scope scope = bucket.scope(scopeName);
+    Collection collection = scope.collection(collectionName);
     CollectionQueryIndexManager queryIndexMgr = collection.queryIndexes();
     CreatePrimaryQueryIndexOptions options = CreatePrimaryQueryIndexOptions.createPrimaryQueryIndexOptions()
         .deferred(false)
-        .numReplicas(replicaCount)
+        .numReplicas(replicas)
         .ignoreIfExists(true);
     queryIndexMgr.createPrimaryIndex(options);
   }
 
-  public void createFieldIndex(String field) {
+  public void createFieldIndex(String bucketName, String scopeName, String collectionName, String field) {
+    Bucket bucket = cluster.bucket(bucketName);
+    Scope scope = bucket.scope(scopeName);
+    Collection collection = scope.collection(collectionName);
     int replicaCount = getIndexReplicaCount();
     if (collection == null) {
-      connectKeyspace();
+      throw new RuntimeException("Can not connect to collection " + collectionName);
     }
     CollectionQueryIndexManager queryIndexMgr = collection.queryIndexes();
     CreateQueryIndexOptions options = CreateQueryIndexOptions.createQueryIndexOptions()
@@ -564,6 +536,25 @@ public final class CouchbaseConnect {
 
     String indexName = "idx_" + field.replaceAll("\\(\\).", "");
     queryIndexMgr.createIndex(indexName, Collections.singletonList(field), options);
+    queryIndexMgr.watchIndexes(Collections.singletonList(indexName), Duration.ofSeconds(10));
+  }
+
+  public void createSecondaryIndex(String bucketName, String scopeName, String collectionName,
+                                   String indexName, List<String> indexKeys) {
+    Bucket bucket = cluster.bucket(bucketName);
+    Scope scope = bucket.scope(scopeName);
+    Collection collection = scope.collection(collectionName);
+    int replicaCount = getIndexReplicaCount();
+    if (collection == null) {
+      throw new RuntimeException("Collection is not connected");
+    }
+    CollectionQueryIndexManager queryIndexMgr = collection.queryIndexes();
+    CreateQueryIndexOptions options = CreateQueryIndexOptions.createQueryIndexOptions()
+        .deferred(false)
+        .numReplicas(replicaCount)
+        .ignoreIfExists(true);
+
+    queryIndexMgr.createIndex(indexName, indexKeys, options);
     queryIndexMgr.watchIndexes(Collections.singletonList(indexName), Duration.ofSeconds(10));
   }
 
@@ -611,22 +602,6 @@ public final class CouchbaseConnect {
         return null;
       }
     });
-  }
-
-  public JsonNode document(String id) {
-    TypeRef<JsonNode> typeRef = new TypeRef<>() {};
-    try {
-      return RetryLogic.retryBlock(() -> {
-        try {
-          GetResult result =  collection.get(id);
-          return result.contentAs(typeRef);
-        } catch (DocumentNotFoundException e) {
-          return null;
-        }
-      });
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
   }
 
   public void upsert(String id, Object content) throws Exception {
@@ -697,98 +672,5 @@ public final class CouchbaseConnect {
           .forEach(data::add);
           return data;
       });
-  }
-
-  public List<JsonNode> runQuery(String statement) {
-    TypeRef<JsonNode> typeRef = new TypeRef<>() {};
-    Bucket bucket = cluster.bucket(bucketName);
-    Scope scope = bucket.scope(scopeName);
-    return scope.reactive().query(statement, queryOptions())
-        .flatMapMany(result -> result.rowsAs(typeRef))
-        .collectList()
-        .block();
-  }
-
-  public List<ObjectNode> analyticsQuery(String statement) {
-    TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
-    Bucket bucket = cluster.bucket(bucketName);
-    Scope scope = bucket.scope(scopeName);
-    try {
-      AnalyticsResult result = cluster.analyticsQuery(statement, analyticsOptions());
-      return result.rowsAs(typeRef);
-    } catch (Throwable t) {
-      LOGGER.error("analytics query exception: {}", t.getMessage(), t);
-      return null;
-    }
-  }
-
-  public List<ObjectNode> analyticsScopeQuery(String statement) {
-    TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
-    Bucket bucket = cluster.bucket(bucketName);
-    Scope scope = bucket.scope(scopeName);
-    try {
-      AnalyticsResult result = scope.analyticsQuery(statement, analyticsOptions()
-          .timeout(Duration.ofSeconds(360))
-          .priority(true));
-      return result.rowsAs(typeRef);
-    } catch (Throwable t) {
-      LOGGER.error("analytics query exception: {}", t.getMessage(), t);
-      return null;
-    }
-  }
-
-  public List<ObjectNode> analyticsScopeQuery(String statement, List<String> parameters) {
-    TypeRef<ObjectNode> typeRef = new TypeRef<>() {};
-    Bucket bucket = cluster.bucket(bucketName);
-    Scope scope = bucket.scope(scopeName);
-    try {
-      AnalyticsResult result = scope.analyticsQuery(statement,
-          analyticsOptions().parameters(com.couchbase.client.java.json.JsonArray.from(parameters))
-              .timeout(Duration.ofSeconds(360))
-              .priority(true));
-      return result.rowsAs(typeRef);
-    } catch (Throwable t) {
-      LOGGER.error("analytics query exception: {}", t.getMessage(), t);
-      return null;
-    }
-  }
-
-  public List<JsonNode> analyticsRESTQuery(String statement) {
-    CouchbaseHttpClient client = cluster.httpClient();
-    String endpoint = "/analytics/service";
-    HttpResponse response;
-
-    ObjectMapper mapper = new ObjectMapper();
-    ObjectNode body = mapper.createObjectNode();
-
-    try {
-      body.put("statement", statement);
-      body.put("query_context", "default:" + bucketName + "." + scopeName);
-      response = client.post(
-          HttpTarget.analytics(),
-          HttpPath.of(endpoint),
-          HttpPostOptions.httpPostOptions().timeout(Duration.ofSeconds(360))
-              .body(HttpBody.json(body.toString())));
-    } catch (Exception e) {
-      LOGGER.error(e.getMessage(), e);
-      return null;
-    }
-
-    try {
-      if (response == null || !response.success()) {
-        LOGGER.error(response != null ? response.contentAsString() : "no response text (was null)");
-        return null;
-      }
-      List<JsonNode> rows = new ArrayList<>();
-      JsonNode results = mapper.readTree(response.contentAsString());
-      if (results.has("results")) {
-        for (JsonNode row : results.get("results")) {
-          rows.add(row);
-        }
-      }
-      return rows;
-    } catch (Exception e) {
-      throw new RuntimeException(e.getMessage(), e);
-    }
   }
 }

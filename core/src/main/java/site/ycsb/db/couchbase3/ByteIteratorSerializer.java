@@ -10,6 +10,10 @@ import java.io.IOException;
 public class ByteIteratorSerializer extends JsonSerializer<ByteIterator> {
   @Override
   public void serialize(ByteIterator value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
-    gen.writeString(value.toString());
+    if (value.valueType == ByteIterator.valueDataType.LONG) {
+      gen.writeNumber(value.toLong());
+    } else {
+      gen.writeString(value.toString());
+    }
   }
 }
