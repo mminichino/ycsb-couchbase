@@ -32,12 +32,9 @@ import com.couchbase.client.java.codec.Transcoder;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.java.json.JsonArray;
 import com.couchbase.client.java.json.JsonObject;
-import com.couchbase.client.java.query.QueryResult;
-import com.couchbase.client.java.query.QueryScanConsistency;
 import com.couchbase.client.java.query.ReactiveQueryResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.slf4j.LoggerFactory;
 import site.ycsb.*;
 
@@ -51,10 +48,6 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-import static com.couchbase.client.java.kv.GetOptions.getOptions;
-import static com.couchbase.client.java.kv.MutateInOptions.mutateInOptions;
-import static com.couchbase.client.java.kv.MutateInSpec.arrayAppend;
-import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
 import static com.couchbase.client.java.query.QueryOptions.queryOptions;
 
 /**
@@ -83,19 +76,11 @@ public class Couchbase3SQLClient extends DB {
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Cluster cluster;
   private static volatile Bucket bucket;
-  private static volatile Collection collection;
   private static volatile ClusterEnvironment environment;
   private static String keySpace;
   private static boolean adhoc;
-  private static boolean indexCreate;
   private static String allFields;
   private static int maxParallelism;
-  private static int ttlSeconds;
-  private static boolean arrayMode;
-  private static String arrayKey;
-  private static Transcoder transcoder;
-  private static Class<?> contentType;
-  private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
 
   @Override
   public void init() throws DBException {
@@ -132,38 +117,18 @@ public class Couchbase3SQLClient extends DB {
       LOGGER.setLevel(Level.DEBUG);
     }
 
-    boolean nativeCodec = getProperties().getProperty("couchbase.codec", "native").equals("native");
-
-    if (nativeCodec) {
-      transcoder = RawJsonTranscoder.INSTANCE;
-      contentType = String.class;
-    } else {
-      transcoder = MapTranscoder.INSTANCE;
-      contentType = Map.class;
-    }
-
-    durability =
-        setDurabilityLevel(Integer.parseInt(properties.getProperty("couchbase.durability", "0")));
-
-    arrayMode = properties.getProperty("couchbase.mode", "default").equals("array");
-    arrayKey = properties.getProperty("subdoc.arrayKey", "DataArray");
-
     adhoc = properties.getProperty("couchbase.adhoc", "false").equals("true");
     maxParallelism = Integer.parseInt(properties.getProperty("couchbase.maxParallelism", "0"));
     int kvEndpoints = Integer.parseInt(properties.getProperty("couchbase.kvEndpoints", "8"));
-
     long kvTimeout = Long.parseLong(properties.getProperty("couchbase.kvTimeout", "10"));
     long connectTimeout = Long.parseLong(properties.getProperty("couchbase.connectTimeout", "10"));
     long queryTimeout = Long.parseLong(properties.getProperty("couchbase.queryTimeout", "75"));
 
-    ttlSeconds = Integer.parseInt(properties.getProperty("couchbase.ttlSeconds", "0"));
-
-    indexCreate = properties.getProperty(INDEX_CREATE, INDEX_CREATE_DEFAULT).equals("true");
     int fieldCount = Integer.parseInt(properties.getProperty(FIELD_COUNT_PROPERTY, FIELD_COUNT_PROPERTY_DEFAULT));
 
     StringBuilder fieldBuilder = new StringBuilder();
-    fieldBuilder.append("id");
-    for (int idx = 0; idx < fieldCount; idx++) {
+    fieldBuilder.append("field0");
+    for (int idx = 1; idx < fieldCount; idx++) {
       fieldBuilder.append(",field");
       fieldBuilder.append(idx);
     }
@@ -224,7 +189,6 @@ public class Couchbase3SQLClient extends DB {
               ClusterOptions.clusterOptions(authenticator).environment(environment));
           bucket = cluster.bucket(bucketName);
           bucket.waitUntilReady(Duration.ofSeconds(5));
-          collection = bucket.scope(scopeName).collection(collectionName);
         }
       } catch(Exception e) {
         logError(e, connectString);
@@ -265,28 +229,25 @@ public class Couchbase3SQLClient extends DB {
    * @param result A Map of field/value pairs for the result.
    */
   @Override
+  @SuppressWarnings("unchecked")
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
-    final String query = "SELECT " + allFields + " FROM " + keySpace + " WHERE meta().id = \"$1\"";
+    final String query = "SELECT " + allFields + " FROM " + keySpace + " WHERE id = ?";
     MapSerializer serializer = new MapSerializer();
     try {
-      QueryResult r = cluster.query(query, queryOptions()
-          .adhoc(adhoc)
-          .maxParallelism(maxParallelism)
-          .serializer(serializer)
-          .parameters(JsonArray.from(key)));
-//      cluster.reactive().query(query, queryOptions()
-//              .scanConsistency(QueryScanConsistency.REQUEST_PLUS)
-//              .serializer(serializer)
-//              .maxParallelism(maxParallelism))
-//          .flatMapMany(res -> res.rowsAsObject())
-//          .map(Map::values)
-//          .flatMapIterable(o -> mapper.convertValue(o, JsonNode.class))
-//          .collectList()
-//          .block();
-      result = r.rowsAs(Map.class).get(0);
-      LOGGER.info(result.toString());
+      result = cluster.reactive().query(query, queryOptions()
+              .pipelineBatch(256)
+              .pipelineCap(1024)
+              .scanCap(1024)
+              .maxParallelism(maxParallelism)
+              .readonly(true)
+              .adhoc(adhoc)
+              .serializer(serializer)
+              .parameters(JsonArray.from(key)))
+          .flatMapMany(r -> r.rowsAs(Map.class))
+          .take(1)
+          .blockLast();
       if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug(r.toString());
+        LOGGER.debug("Row (read): {}", result != null ? result.toString() : "null");
       }
       return Status.OK;
     } catch (DocumentNotFoundException e) {
@@ -297,31 +258,6 @@ public class Couchbase3SQLClient extends DB {
     }
   }
 
-  public void upsertArray(String id, String arrayKey, Map<String, String> content) {
-    try {
-      collection.mutateIn(id, Collections.singletonList(arrayAppend(arrayKey, Collections.singletonList(content))),
-          mutateInOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability));
-    } catch (DocumentNotFoundException e) {
-      ObjectMapper mapper = new ObjectMapper();
-      ArrayNode array = mapper.createArrayNode();
-      ObjectNode document = mapper.valueToTree(content);
-      array.add(document);
-      ObjectNode arrayDoc = mapper.createObjectNode();
-      arrayDoc.set(arrayKey, array);
-      collection.upsert(id, arrayDoc, upsertOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability));
-    }
-  }
-
-  public void insertArray(String id, String arrayKey, Map<String, String> content) {
-    ObjectMapper mapper = new ObjectMapper();
-    ArrayNode array = mapper.createArrayNode();
-    ObjectNode document = mapper.valueToTree(content);
-    array.add(document);
-    ObjectNode arrayDoc = mapper.createObjectNode();
-    arrayDoc.set(arrayKey, array);
-    collection.upsert(id, arrayDoc, upsertOptions().expiry(Duration.ofSeconds(ttlSeconds)).durability(durability));
-  }
-
   /**
    * Update record.
    * @param table The name of the table.
@@ -330,18 +266,17 @@ public class Couchbase3SQLClient extends DB {
    */
   @Override
   public Status update(final String table, final String key, final Map<String, ByteIterator> values) {
-    if (indexCreate) {
-      values.put("id", new StringByteIterator(key));
-    }
+    ObjectMapper mapper = new ObjectMapper();
+    SimpleModule module = new SimpleModule("ByteIteratorSerializer");
+    module.addSerializer(ByteIterator.class, new ByteIteratorSerializer());
+    mapper.registerModule(module);
     try {
-      if (arrayMode) {
-        upsertArray(key, arrayKey, encode(values));
-      } else {
-        collection.upsert(key, values,
-            upsertOptions().expiry(Duration.ofSeconds(ttlSeconds))
-                .durability(durability)
-                .transcoder(MapTranscoder.INSTANCE));
-      }
+      values.put("id", new StringByteIterator(key));
+      String json = mapper.writeValueAsString(values);
+      final String query = "UPSERT INTO " + keySpace + "(KEY, VALUE) VALUES (\"" + key + "\", " + json + ")";
+      cluster.query(query, queryOptions()
+          .adhoc(adhoc)
+          .maxParallelism(maxParallelism));
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
@@ -357,37 +292,22 @@ public class Couchbase3SQLClient extends DB {
    */
   @Override
   public Status insert(final String table, final String key, final Map<String, ByteIterator> values) {
-    if (indexCreate) {
-      values.put("id", new StringByteIterator(key));
-    }
+    ObjectMapper mapper = new ObjectMapper();
+    SimpleModule module = new SimpleModule("ByteIteratorSerializer");
+    module.addSerializer(ByteIterator.class, new ByteIteratorSerializer());
+    mapper.registerModule(module);
     try {
-      if (arrayMode) {
-        insertArray(key, arrayKey, encode(values));
-      } else {
-        collection.upsert(key, values,
-            upsertOptions().expiry(Duration.ofSeconds(ttlSeconds))
-                .durability(durability)
-                .transcoder(MapTranscoder.INSTANCE));
-      }
+      values.put("id", new StringByteIterator(key));
+      String json = mapper.writeValueAsString(values);
+      final String query = "UPSERT INTO " + keySpace + "(KEY, VALUE) VALUES (\"" + key + "\", " + json + ")";
+      cluster.query(query, queryOptions()
+          .adhoc(adhoc)
+          .maxParallelism(maxParallelism));
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
     }
-  }
-
-  /**
-   * Helper method to turn the passed in iterator values into a map we can encode to json.
-   *
-   * @param values the values to encode.
-   * @return the map of encoded values.
-   */
-  private static Map<String, String> encode(final Map<String, ByteIterator> values) {
-    Map<String, String> result = new HashMap<>();
-    values.entrySet()
-        .parallelStream()
-        .forEach(entry -> result.put(entry.getKey(), entry.getValue().toString()));
-    return result;
   }
 
   /**
@@ -398,7 +318,11 @@ public class Couchbase3SQLClient extends DB {
   @Override
   public Status delete(final String table, final String key) {
     try {
-      collection.remove(key);
+      final String query = "DELETE FROM " + keySpace + " WHERE id = ?";
+      cluster.query(query, queryOptions()
+          .adhoc(adhoc)
+          .maxParallelism(maxParallelism)
+          .parameters(JsonArray.from(key)));
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("delete transaction exception: {}", t.getMessage(), t);
@@ -417,7 +341,7 @@ public class Couchbase3SQLClient extends DB {
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
-    final String query = "SELECT " + allFields + " FROM " + keySpace + " WHERE id >= \"$1\" LIMIT $2;";
+    final String query = "SELECT " + allFields + " FROM " + keySpace + " WHERE id >= ? LIMIT ?";
     try {
       List<JsonObject> data = cluster.reactive().query(query, queryOptions()
               .pipelineBatch(256)
