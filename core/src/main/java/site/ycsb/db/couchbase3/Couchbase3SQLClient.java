@@ -32,6 +32,7 @@ import com.couchbase.client.java.codec.Transcoder;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.java.json.JsonArray;
 import com.couchbase.client.java.json.JsonObject;
+import com.couchbase.client.java.query.QueryMetaData;
 import com.couchbase.client.java.query.ReactiveQueryResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
@@ -274,9 +275,14 @@ public class Couchbase3SQLClient extends DB {
       values.put("id", new StringByteIterator(key));
       String json = mapper.writeValueAsString(values);
       final String query = "UPSERT INTO " + keySpace + "(KEY, VALUE) VALUES (\"" + key + "\", " + json + ")";
-      cluster.query(query, queryOptions()
-          .adhoc(adhoc)
-          .maxParallelism(maxParallelism));
+      cluster.reactive().query(query, queryOptions()
+              .pipelineBatch(256)
+              .pipelineCap(1024)
+              .scanCap(1024)
+              .maxParallelism(maxParallelism)
+              .adhoc(adhoc))
+          .flatMapMany(ReactiveQueryResult::metaData)
+          .blockLast();
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
@@ -300,9 +306,14 @@ public class Couchbase3SQLClient extends DB {
       values.put("id", new StringByteIterator(key));
       String json = mapper.writeValueAsString(values);
       final String query = "UPSERT INTO " + keySpace + "(KEY, VALUE) VALUES (\"" + key + "\", " + json + ")";
-      cluster.query(query, queryOptions()
-          .adhoc(adhoc)
-          .maxParallelism(maxParallelism));
+      cluster.reactive().query(query, queryOptions()
+              .pipelineBatch(256)
+              .pipelineCap(1024)
+              .scanCap(1024)
+              .maxParallelism(maxParallelism)
+              .adhoc(adhoc))
+          .flatMapMany(ReactiveQueryResult::metaData)
+          .blockLast();
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
