@@ -31,8 +31,6 @@ import com.couchbase.client.java.codec.RawJsonTranscoder;
 import com.couchbase.client.java.codec.Transcoder;
 import com.couchbase.client.java.env.ClusterEnvironment;
 import com.couchbase.client.java.json.JsonArray;
-import com.couchbase.client.java.json.JsonObject;
-import com.couchbase.client.java.query.QueryMetaData;
 import com.couchbase.client.java.query.ReactiveQueryResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
@@ -49,7 +47,9 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
+import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
 import static com.couchbase.client.java.query.QueryOptions.queryOptions;
+import static com.couchbase.client.java.kv.GetOptions.getOptions;
 
 /**
  * A class that implements the Couchbase Java SDK to be used with YCSB.
@@ -69,19 +69,32 @@ public class Couchbase3SQLClient extends DB {
   public static final String COUCHBASE_BUCKET = "couchbase.bucket";
   public static final String COUCHBASE_SCOPE = "couchbase.scope";
   public static final String COUCHBASE_COLLECTION = "couchbase.collection";
-  public static final String INDEX_CREATE = "index.create";
-  public static final String INDEX_CREATE_DEFAULT = "false";
+  public static final String COUCHBASE_READ_MODE = "couchbase.read.mode";
+  public static final String COUCHBASE_INSERT_MODE = "couchbase.insert.mode";
+  public static final String COUCHBASE_UPDATE_MODE = "couchbase.update.mode";
+  public static final String COUCHBASE_SCAN_MODE = "couchbase.scan.mode";
+  public static final String COUCHBASE_DELETE_MODE = "couchbase.delete.mode";
   public static final String FIELD_COUNT_PROPERTY = "fieldcount";
   public static final String FIELD_COUNT_PROPERTY_DEFAULT = "10";
   private static final AtomicInteger OPEN_CLIENTS = new AtomicInteger(0);
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Cluster cluster;
   private static volatile Bucket bucket;
+  private static volatile Collection collection;
   private static volatile ClusterEnvironment environment;
   private static String keySpace;
   private static boolean adhoc;
   private static String allFields;
   private static int maxParallelism;
+  private static int ttlSeconds;
+  private static Transcoder transcoder;
+  private static Class<?> contentType;
+  private static TestMode readMode;
+  private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
+  private static TestMode insertMode;
+  private static TestMode updateMode;
+  private static TestMode deleteMode;
+  private static TestMode scanMode;
 
   @Override
   public void init() throws DBException {
@@ -118,12 +131,32 @@ public class Couchbase3SQLClient extends DB {
       LOGGER.setLevel(Level.DEBUG);
     }
 
+    boolean nativeCodec = getProperties().getProperty("couchbase.codec", "native").equals("native");
+
+    if (nativeCodec) {
+      transcoder = RawJsonTranscoder.INSTANCE;
+      contentType = String.class;
+    } else {
+      transcoder = MapTranscoder.INSTANCE;
+      contentType = Map.class;
+    }
+
+    durability =
+        setDurabilityLevel(Integer.parseInt(properties.getProperty("couchbase.durability", "0")));
+
+    readMode = TestMode.valueOf(properties.getProperty(COUCHBASE_READ_MODE, "kv").toUpperCase());
+    insertMode = TestMode.valueOf(properties.getProperty(COUCHBASE_INSERT_MODE, "kv").toUpperCase());
+    updateMode = TestMode.valueOf(properties.getProperty(COUCHBASE_UPDATE_MODE, "kv").toUpperCase());
+    deleteMode = TestMode.valueOf(properties.getProperty(COUCHBASE_DELETE_MODE, "kv").toUpperCase());
+    scanMode = TestMode.valueOf(properties.getProperty(COUCHBASE_SCAN_MODE, "kv").toUpperCase());
+
     adhoc = properties.getProperty("couchbase.adhoc", "false").equals("true");
     maxParallelism = Integer.parseInt(properties.getProperty("couchbase.maxParallelism", "0"));
     int kvEndpoints = Integer.parseInt(properties.getProperty("couchbase.kvEndpoints", "8"));
     long kvTimeout = Long.parseLong(properties.getProperty("couchbase.kvTimeout", "10"));
     long connectTimeout = Long.parseLong(properties.getProperty("couchbase.connectTimeout", "10"));
     long queryTimeout = Long.parseLong(properties.getProperty("couchbase.queryTimeout", "75"));
+    ttlSeconds = Integer.parseInt(properties.getProperty("couchbase.ttlSeconds", "0"));
 
     int fieldCount = Integer.parseInt(properties.getProperty(FIELD_COUNT_PROPERTY, FIELD_COUNT_PROPERTY_DEFAULT));
 
@@ -190,6 +223,7 @@ public class Couchbase3SQLClient extends DB {
               ClusterOptions.clusterOptions(authenticator).environment(environment));
           bucket = cluster.bucket(bucketName);
           bucket.waitUntilReady(Duration.ofSeconds(5));
+          collection = bucket.scope(scopeName).collection(collectionName);
         }
       } catch(Exception e) {
         logError(e, connectString);
@@ -230,8 +264,16 @@ public class Couchbase3SQLClient extends DB {
    * @param result A Map of field/value pairs for the result.
    */
   @Override
-  @SuppressWarnings("unchecked")
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
+    if (readMode == TestMode.KV) {
+      return readKV(key, fields, result);
+    } else {
+      return readSQL(key, fields, result);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  public Status readSQL(String key, Set<String> fields, Map<String, ByteIterator> result) {
     final String query = "SELECT " + allFields + " FROM " + keySpace + " WHERE id = ?";
     MapSerializer serializer = new MapSerializer();
     try {
@@ -259,6 +301,21 @@ public class Couchbase3SQLClient extends DB {
     }
   }
 
+  public Status readKV(String key, Set<String> fields, Map<String, ByteIterator> result) {
+    try {
+      Object r = collection.get(key, getOptions().transcoder(transcoder)).contentAs(contentType);
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug(r.toString());
+      }
+      return Status.OK;
+    } catch (DocumentNotFoundException e) {
+      return Status.NOT_FOUND;
+    } catch (Throwable t) {
+      LOGGER.error("read transaction exception: {}", t.getMessage(), t);
+      return Status.ERROR;
+    }
+  }
+
   /**
    * Update record.
    * @param table The name of the table.
@@ -267,6 +324,14 @@ public class Couchbase3SQLClient extends DB {
    */
   @Override
   public Status update(final String table, final String key, final Map<String, ByteIterator> values) {
+    if (updateMode == TestMode.KV) {
+      return updateKV(key, values);
+    } else {
+      return updateSQL(key, values);
+    }
+  }
+
+  public Status updateSQL(final String key, final Map<String, ByteIterator> values) {
     ObjectMapper mapper = new ObjectMapper();
     SimpleModule module = new SimpleModule("ByteIteratorSerializer");
     module.addSerializer(ByteIterator.class, new ByteIteratorSerializer());
@@ -283,6 +348,20 @@ public class Couchbase3SQLClient extends DB {
               .adhoc(adhoc))
           .flatMapMany(ReactiveQueryResult::metaData)
           .blockLast();
+      return Status.OK;
+    } catch (Throwable t) {
+      LOGGER.error("update transaction exception: {}", t.getMessage(), t);
+      return Status.ERROR;
+    }
+  }
+
+  public Status updateKV(final String key, final Map<String, ByteIterator> values) {
+    try {
+      values.put("id", new StringByteIterator(key));
+      collection.upsert(key, values,
+          upsertOptions().expiry(Duration.ofSeconds(ttlSeconds))
+              .durability(durability)
+              .transcoder(MapTranscoder.INSTANCE));
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
@@ -298,6 +377,14 @@ public class Couchbase3SQLClient extends DB {
    */
   @Override
   public Status insert(final String table, final String key, final Map<String, ByteIterator> values) {
+    if (insertMode == TestMode.KV) {
+      return insertKV(key, values);
+    } else {
+      return insertSQL(key, values);
+    }
+  }
+
+  public Status insertSQL(final String key, final Map<String, ByteIterator> values) {
     ObjectMapper mapper = new ObjectMapper();
     SimpleModule module = new SimpleModule("ByteIteratorSerializer");
     module.addSerializer(ByteIterator.class, new ByteIteratorSerializer());
@@ -321,6 +408,20 @@ public class Couchbase3SQLClient extends DB {
     }
   }
 
+  public Status insertKV(final String key, final Map<String, ByteIterator> values) {
+    try {
+      values.put("id", new StringByteIterator(key));
+      collection.upsert(key, values,
+          upsertOptions().expiry(Duration.ofSeconds(ttlSeconds))
+              .durability(durability)
+              .transcoder(MapTranscoder.INSTANCE));
+      return Status.OK;
+    } catch (Throwable t) {
+      LOGGER.error("update transaction exception: {}", t.getMessage(), t);
+      return Status.ERROR;
+    }
+  }
+
   /**
    * Remove a record.
    * @param table The name of the table.
@@ -328,12 +429,30 @@ public class Couchbase3SQLClient extends DB {
    */
   @Override
   public Status delete(final String table, final String key) {
+    if (deleteMode == TestMode.KV) {
+      return deleteKV(key);
+    } else {
+      return deleteSQL(key);
+    }
+  }
+
+  public Status deleteSQL(final String key) {
     try {
       final String query = "DELETE FROM " + keySpace + " WHERE id = ?";
       cluster.query(query, queryOptions()
           .adhoc(adhoc)
           .maxParallelism(maxParallelism)
           .parameters(JsonArray.from(key)));
+      return Status.OK;
+    } catch (Throwable t) {
+      LOGGER.error("delete transaction exception: {}", t.getMessage(), t);
+      return Status.ERROR;
+    }
+  }
+
+  public Status deleteKV(final String key) {
+    try {
+      collection.remove(key);
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("delete transaction exception: {}", t.getMessage(), t);
@@ -352,9 +471,45 @@ public class Couchbase3SQLClient extends DB {
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
+    if (scanMode == TestMode.KV) {
+      return scanKV(startkey, recordcount, fields, result);
+    } else {
+      return scanSQL(startkey, recordcount, fields, result);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  public Status scanSQL(final String startkey, final int recordcount, final Set<String> fields, final Vector<HashMap<String, ByteIterator>> result) {
     final String query = "SELECT " + allFields + " FROM " + keySpace + " WHERE id >= ? LIMIT ?";
+    MapSerializer serializer = new MapSerializer();
     try {
-      List<JsonObject> data = cluster.reactive().query(query, queryOptions()
+      cluster.reactive().query(query, queryOptions()
+              .pipelineBatch(256)
+              .pipelineCap(1024)
+              .scanCap(1024)
+              .maxParallelism(maxParallelism)
+              .readonly(true)
+              .adhoc(adhoc)
+              .serializer(serializer)
+              .parameters(JsonArray.from(startkey, recordcount)))
+          .flatMapMany(r -> r.rowsAs(Map.class))
+          .map(d -> result.add((HashMap<String, ByteIterator>) d))
+          .blockLast();
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("SQL: Scanned {} records", result != null ? result.size(): 0);
+      }
+      return Status.OK;
+    } catch (Throwable t) {
+      LOGGER.error("scan transaction exception: {}", t.getMessage(), t);
+      return Status.ERROR;
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  public Status scanKV(final String startkey, final int recordcount, final Set<String> fields, final Vector<HashMap<String, ByteIterator>> result) {
+    final String query = "SELECT RAW id FROM " + keySpace + " WHERE id >= ? LIMIT ?";
+    try {
+      cluster.reactive().query(query, queryOptions()
               .pipelineBatch(256)
               .pipelineCap(1024)
               .scanCap(1024)
@@ -362,11 +517,12 @@ public class Couchbase3SQLClient extends DB {
               .readonly(true)
               .adhoc(adhoc)
               .parameters(JsonArray.from(startkey, recordcount)))
-          .flatMapMany(ReactiveQueryResult::rowsAsObject)
-          .collectList()
-          .block();
+          .flatMapMany(r -> r.rowsAs(String.class))
+          .flatMap(i -> collection.reactive().get(i, getOptions().transcoder(MapTranscoder.INSTANCE)))
+          .map(d -> result.add((HashMap<String, ByteIterator>) d.contentAs(Map.class)))
+          .blockLast();
       if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("Scanned {} records", data != null ? data.size(): 0);
+        LOGGER.debug("KV: Scanned {} records", result != null ? result.size(): 0);
       }
       return Status.OK;
     } catch (Throwable t) {
