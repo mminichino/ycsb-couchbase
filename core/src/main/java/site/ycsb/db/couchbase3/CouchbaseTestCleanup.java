@@ -3,6 +3,8 @@ package site.ycsb.db.couchbase3;
 import site.ycsb.TestCleanup;
 import java.util.Properties;
 
+import static site.ycsb.db.couchbase3.RetryLogic.retryVoid;
+
 import com.codelry.util.cbdb3.CouchbaseConnect;
 import com.codelry.util.cbdb3.CouchbaseConfig;
 
@@ -19,7 +21,7 @@ public class CouchbaseTestCleanup extends TestCleanup {
 
     try {
       System.err.printf("Removing bucket %s on cluster:[%s]\n", db.getBucketName(), db.hostValue());
-      db.dropBucket();
+      retryVoid(db::dropBucket);
       db.disconnect();
     } catch (Exception e) {
       throw new RuntimeException(e);

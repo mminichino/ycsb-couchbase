@@ -20,11 +20,11 @@ public final class RetryLogic {
       try {
         return block.call();
       } catch (Exception e) {
-        LOGGER.error(String.format("Retry count %d: %s: error: %s", retryCount, e.getClass(), e.getMessage()));
+        LOGGER.error("Retry count {}: {}: error: {}", retryCount, e.getClass(), e.getMessage());
         Writer buffer = new StringWriter();
         PrintWriter pw = new PrintWriter(buffer);
         e.printStackTrace(pw);
-        LOGGER.error(String.format("%s", buffer));
+        LOGGER.error("{}", buffer);
         if (retryNumber == retryCount) {
           throw e;
         } else {
@@ -39,6 +39,29 @@ public final class RetryLogic {
       }
     }
     return block.call();
+  }
+
+  public static void retryVoid(Runnable block) throws Exception {
+    int retryCount = 10;
+    long waitFactor = 100L;
+    for (int retryNumber = 1; retryNumber <= retryCount; retryNumber++) {
+      try {
+        block.run();
+      } catch (Exception e) {
+        LOGGER.debug("Retry count: {} error: {}", retryCount, e.getMessage(), e);
+        if (retryNumber == retryCount) {
+          throw e;
+        } else {
+          double factor = waitFactor * retryNumber;
+          long wait = (long) factor;
+          try {
+            Thread.sleep(wait);
+          } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+          }
+        }
+      }
+    }
   }
 
   private RetryLogic() {

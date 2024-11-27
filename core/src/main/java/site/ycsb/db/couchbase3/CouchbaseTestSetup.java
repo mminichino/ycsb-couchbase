@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+import static site.ycsb.db.couchbase3.RetryLogic.retryVoid;
+
 import com.codelry.util.cbdb3.CouchbaseConnect;
 import com.codelry.util.cbdb3.CouchbaseConfig;
 
@@ -29,11 +31,11 @@ public class CouchbaseTestSetup extends TestSetup {
 
     try {
       System.err.printf("Creating bucket %s (%s) on cluster:[%s]\n", db.getBucketName(), config.getBucketStorage().toString(), db.hostValue());
-      db.createBucket();
+      retryVoid(db::createBucket);
       System.err.printf("Creating scope %s\n", db.getScopeName());
-      db.createScope();
+      retryVoid(db::createScope);
       System.err.printf("Creating collection %s\n", db.getCollectionName());
-      db.createCollection();
+      retryVoid(db::createCollection);
       if (index) {
         List<String> allFields = new ArrayList<>();
         allFields.add("id");
