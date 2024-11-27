@@ -35,20 +35,22 @@ setup:
 package:
 		bumpversion --allow-dirty build
 		mvn clean install
-release: package download
+release: tag download remote_tag remote_download remote
 download:
-		gh release create -R "couchbaselabs/$(PROJECT_NAME)" \
-		-t "Release $(PROJECT_VERSION)" \
-		-n "Release $(PROJECT_VERSION)" \
-		$(PROJECT_VERSION) \
-		./core/target/ycsb-couchbase.zip
-recall:
-		gh release delete -R "couchbaselabs/$(PROJECT_NAME)" $(PROJECT_VERSION) --cleanup-tag -y
-local:
+		$(eval REV_FILE := $(shell ls -tr core/target/ycsb-couchbase.zip | tail -1))
+		gh release upload --clobber -R "mminichino/$(PROJECT_NAME)" $(PROJECT_VERSION) $(REV_FILE)
+tag:
+		if gh release view -R "mminichino/$(PROJECT_NAME)" $(PROJECT_VERSION) >/dev/null 2>&1 ; then gh release delete -R "mminichino/$(PROJECT_NAME)" $(PROJECT_VERSION) --cleanup-tag -y ; fi
 		gh release create -R "mminichino/$(PROJECT_NAME)" \
 		-t "Release $(PROJECT_VERSION)" \
 		-n "Release $(PROJECT_VERSION)" \
-		$(PROJECT_VERSION) \
-		./core/target/ycsb-couchbase.zip
-local_recall:
-		gh release delete -R "mminichino/$(PROJECT_NAME)" $(PROJECT_VERSION) --cleanup-tag -y
+		$(PROJECT_VERSION)
+remote_download:
+		$(eval REV_FILE := $(shell ls -tr core/target/ycsb-couchbase.zip | tail -1))
+		gh release upload --clobber -R "couchbaselabs/$(PROJECT_NAME)" $(PROJECT_VERSION) $(REV_FILE)
+remote_tag:
+		if gh release view -R "couchbaselabs/$(PROJECT_NAME)" $(PROJECT_VERSION) >/dev/null 2>&1 ; then gh release delete -R "couchbaselabs/$(PROJECT_NAME)" $(PROJECT_VERSION) --cleanup-tag -y ; fi
+		gh release create -R "couchbaselabs/$(PROJECT_NAME)" \
+		-t "Release $(PROJECT_VERSION)" \
+		-n "Release $(PROJECT_VERSION)" \
+		$(PROJECT_VERSION)
