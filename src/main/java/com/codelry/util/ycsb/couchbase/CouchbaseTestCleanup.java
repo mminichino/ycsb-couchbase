@@ -1,0 +1,30 @@
+package com.codelry.util.ycsb.couchbase;
+
+import com.codelry.util.ycsb.TestCleanup;
+import java.util.Properties;
+
+import static com.codelry.util.ycsb.couchbase.RetryLogic.retryVoid;
+
+import com.codelry.util.cbdb3.CouchbaseConnect;
+import com.codelry.util.cbdb3.CouchbaseConfig;
+
+/**
+ * Clean Cluster after Testing.
+ */
+public class CouchbaseTestCleanup extends TestCleanup {
+
+  @Override
+  public void testClean(Properties properties) {
+    CouchbaseConnect db = CouchbaseConnect.getInstance();
+    CouchbaseConfig config = new CouchbaseConfig().fromProperties(properties);
+    db.connect(config);
+
+    try {
+      System.err.printf("Removing bucket %s on cluster:[%s]\n", db.getBucketName(), db.hostValue());
+      retryVoid(db::dropBucket);
+      db.disconnect();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+}

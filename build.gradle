@@ -1,0 +1,156 @@
+import java.nio.file.Files
+import java.nio.file.Paths
+
+plugins {
+    id 'java'
+    id 'java-library'
+    id 'distribution'
+    id 'application'
+    id 'org.jreleaser' version '1.20.0'
+}
+
+group = 'com.codelry.util.ycsb.couchbase'
+version = '3.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.codelry.util.ycsb:ycsb-core:0.18.2'
+    implementation 'com.codelry.util:restfull-core:1.0.2'
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.19.2'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
+    implementation 'com.couchbase.client:java-client:3.12.0'
+    implementation 'com.google.code.gson:gson:2.14.0'
+    implementation 'com.codelry.util:couchbase-connect-sdk3:1.1.3'
+    implementation 'commons-cli:commons-cli:1.11.0'
+    implementation 'io.netty:netty-resolver-dns-native-macos:4.2.4.Final:osx-aarch_64'
+    implementation 'io.netty:netty-resolver-dns-native-macos:4.2.4.Final:osx-x86_64'
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.3')
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+tasks.compileJava {
+    options.release.set(8)
+}
+
+tasks.test {
+    useJUnitPlatform()
+}
+
+tasks.register('printTestClasspath') {
+    doLast {
+        println "Test Classpath:"
+        sourceSets.test.runtimeClasspath.each { file ->
+            println file.absolutePath
+        }
+    }
+}
+
+tasks.register('updateAppVersionProperties') {
+    doLast {
+        def appPropertiesFile = file("src/main/resources/project.properties")
+        def properties = new Properties()
+        if (appPropertiesFile.exists()) {
+            appPropertiesFile.withInputStream { properties.load(it) }
+        }
+        properties.setProperty("version", project.version.toString())
+        appPropertiesFile.withWriter { properties.store(it, null) }
+    }
+}
+
+tasks.withType(Test).configureEach {
+    doFirst {
+        def envFile = file('.env')
+        if (envFile.exists()) {
+            Files.readAllLines(Paths.get(envFile.toURI())).each { line ->
+                if (line && !line.startsWith('#')) {
+                    def parts = line.split('=', 2)
+                    if (parts.length == 2) {
+                        environment parts[0].trim(), parts[1].trim()
+                    }
+                }
+            }
+        }
+    }
+}
+
+sourceSets {
+    test {
+        resources {
+            srcDir 'src/test/conf'
+            include '**/*'
+        }
+    }
+}
+
+application {
+    mainClass = 'com.codelry.util.ycsb.RunBenchmark'
+    applicationDistribution.from("src/main/conf/") {
+        into "conf"
+    }
+}
+
+tasks.named("startScripts") {
+    def appName = project.name
+    doLast {
+        def unixScript = new File(outputDir, appName)
+        unixScript.text = unixScript.text.replace(
+                'CLASSPATH=$APP_HOME/lib',
+                'CLASSPATH=$APP_HOME/conf:$APP_HOME/lib'
+        )
+
+        def windowsScript = new File(outputDir, "${appName}.bat")
+        windowsScript.text = windowsScript.text.replace(
+                'set CLASSPATH=%APP_HOME%\\lib',
+                'set CLASSPATH=%APP_HOME%\\conf;%APP_HOME%\\lib'
+        )
+    }
+}
+
+tasks.named("distTar") {
+    compression = Compression.GZIP
+}
+
+jreleaser {
+    project {
+        name = 'ycsb-couchbase'
+        description = 'Couchbase YCSB implementation'
+        website = 'https://github.com/mminichino/ycsb-couchbase'
+        authors = ['Michael Minichino']
+        license = 'Apache-2.0'
+        copyright = "2026 Michael Minichino"
+    }
+
+    release {
+        github {
+            repoOwner = 'mminichino'
+            name = 'ycsb-couchbase'
+            branch = 'main'
+            changelog {
+                enabled = false
+            }
+        }
+    }
+
+    distributions {
+        app {
+            distributionType = 'JAVA_BINARY'
+            artifacts {
+                artifact {
+                    path = "build/distributions/{{projectName}}-{{projectVersion}}.zip"
+                }
+            }
+        }
+    }
+}
