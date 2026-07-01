@@ -80,7 +80,10 @@ public class CouchbaseClientBinding extends DB {
 
     synchronized (INIT_COORDINATOR) {
       try {
-        CouchbaseConfig config = new CouchbaseConfig().fromProperties(properties);
+        CouchbaseConfig config = new CouchbaseConfig().fromProperties(properties)
+            .kvTimeout(10)
+            .connectTimeout(20)
+            .queryTimeout(90);
         CouchbaseConnect db = CouchbaseConnect.getInstance();
         db.connect(config);
 
@@ -204,9 +207,10 @@ public class CouchbaseClientBinding extends DB {
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
-    final String query = "SELECT RAW META(t).id FROM " + keySpace + " AS t WHERE META(t).id >= \"$1\" LIMIT $2;";
+    final String query = "SELECT RAW META(t).id FROM " + keySpace + " AS t WHERE META(t).id >= \"$1\" ORDER BY META(t).id LIMIT $2;";
     try {
       Long scanned = cluster.reactive().query(query, queryOptions()
+              .adhoc(false)
               .parameters(JsonArray.from(startkey, recordcount)))
           .flatMapMany(reactiveQueryResult -> reactiveQueryResult.rowsAs(String.class))
           .flatMap(docId -> collection.reactive().get(docId, getOptions().transcoder(MapTranscoder.INSTANCE))
@@ -229,17 +233,17 @@ public class CouchbaseClientBinding extends DB {
   }
 
   private HashMap<String, ByteIterator> toScanRecord(final Map<String, ByteIterator> document, final Set<String> fields) {
-    final HashMap<String, ByteIterator> record = new HashMap<>();
     if (fields == null) {
-      record.putAll(document);
+      return (HashMap<String, ByteIterator>) document;
     } else {
+      final HashMap<String, ByteIterator> record = new HashMap<>(Math.max(4, (int)(fields.size() / 0.75f) + 1));
       for (String field : fields) {
         ByteIterator value = document.get(field);
         if (value != null) {
           record.put(field, value);
         }
       }
+      return record;
     }
-    return record;
   }
 }
