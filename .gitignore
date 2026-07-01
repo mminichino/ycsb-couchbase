@@ -9,7 +9,6 @@ test.*.properties
 output.log
 ycsb.log
 output/
-src/test/conf/*.properties
 .tmp/
 
 # ignore standard Eclipse files
