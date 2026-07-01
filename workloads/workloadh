@@ -15,7 +15,7 @@ betabeta=9000
 fieldlength=32
 fieldcount=14
 statistics=true
-workload=site.ycsb.workloads.CorePlusWorkload
+workload=com.codelry.util.ycsb.workloads.CoreWorkload
 
 readallfields=true
 writeallfields=true

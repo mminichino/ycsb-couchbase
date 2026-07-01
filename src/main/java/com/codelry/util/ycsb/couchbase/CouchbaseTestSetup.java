@@ -2,7 +2,6 @@ package com.codelry.util.ycsb.couchbase;
 
 import com.codelry.util.ycsb.TestSetup;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
@@ -11,40 +10,32 @@ import static com.codelry.util.ycsb.couchbase.RetryLogic.retryVoid;
 import com.codelry.util.cbdb3.CouchbaseConnect;
 import com.codelry.util.cbdb3.CouchbaseConfig;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Prepare Cluster for Testing.
  */
 public class CouchbaseTestSetup extends TestSetup {
-  public static final String INDEX_CREATE = "index.create";
-  public static final String FIELD_COUNT_PROPERTY = "fieldcount";
-  public static final String FIELD_COUNT_PROPERTY_DEFAULT = "10";
+  static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTestSetup.class);
 
   @Override
   public void testSetup(Properties properties) {
-    boolean index = properties.getProperty(INDEX_CREATE, "false").equals("true");
-    int fieldCount = Integer.parseInt(properties.getProperty(FIELD_COUNT_PROPERTY, FIELD_COUNT_PROPERTY_DEFAULT));
-    String indexName = "ycsb_fields_idx";
+    String indexName = "idx_meta_id";
 
     CouchbaseConnect db = CouchbaseConnect.getInstance();
     CouchbaseConfig config = new CouchbaseConfig().fromProperties(properties);
     db.connect(config);
 
     try {
-      System.err.printf("Creating bucket %s (%s) on cluster:[%s]\n", db.getBucketName(), config.getBucketStorage().toString(), db.hostValue());
+      LOGGER.info("Creating bucket {} ({}) on cluster:[{}]", db.getBucketName(), config.getBucketStorage().toString(), db.hostValue());
       retryVoid(db::createBucket);
-      System.err.printf("Creating scope %s\n", db.getScopeName());
+      LOGGER.info("Creating scope {}", db.getScopeName());
       retryVoid(db::createScope);
-      System.err.printf("Creating collection %s\n", db.getCollectionName());
+      LOGGER.info("Creating collection {}", db.getCollectionName());
       retryVoid(db::createCollection);
-      if (index) {
-        List<String> allFields = new ArrayList<>();
-        allFields.add("id");
-        for (int i = 0; i < fieldCount; i++) {
-          allFields.add("field" + i);
-        }
-        System.err.printf("Creating index %s on %s\n", indexName, db.getCollectionName());
-        db.createSecondaryIndex(indexName, allFields);
-      }
+      LOGGER.info("Creating index {} on {}", indexName, db.getCollectionName());
+      db.createSecondaryIndex(indexName, List.of("META().id"));
       db.disconnect();
     } catch (Exception e) {
       throw new RuntimeException(e);

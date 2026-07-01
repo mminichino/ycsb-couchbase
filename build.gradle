@@ -1,12 +1,11 @@
-import java.nio.file.Files
-import java.nio.file.Paths
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     id 'java'
     id 'java-library'
     id 'distribution'
     id 'application'
-    id 'org.jreleaser' version '1.20.0'
+    id 'org.jreleaser' version '1.24.0'
 }
 
 group = 'com.codelry.util.ycsb.couchbase'
@@ -17,19 +16,21 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.codelry.util.ycsb:ycsb-core:0.18.2'
-    implementation 'com.codelry.util:restfull-core:1.0.2'
-    implementation 'com.fasterxml.jackson.core:jackson-core:2.19.2'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
+    implementation 'com.codelry.util.ycsb:ycsb-core:0.18.3'
+    implementation 'com.codelry.util:restfull-core:1.0.5'
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.22.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.0'
     implementation 'com.couchbase.client:java-client:3.12.0'
     implementation 'com.google.code.gson:gson:2.14.0'
-    implementation 'com.codelry.util:couchbase-connect-sdk3:1.1.3'
+    implementation 'com.codelry.util:couchbase-connect-sdk3:1.2.1'
+    implementation 'org.apache.logging.log4j:log4j-core:2.26.0'
     implementation 'commons-cli:commons-cli:1.11.0'
     implementation 'io.netty:netty-resolver-dns-native-macos:4.2.4.Final:osx-aarch_64'
     implementation 'io.netty:netty-resolver-dns-native-macos:4.2.4.Final:osx-x86_64'
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
-    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.3')
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers'
 }
@@ -41,11 +42,28 @@ java {
 }
 
 tasks.compileJava {
-    options.release.set(8)
+    options.release = 17
 }
 
-tasks.test {
+tasks.named('javadoc') {
+    options {
+        addStringOption('Xdoclint:all,-missing', '-quiet')
+    }
+}
+
+def requestedTasks = gradle.startParameter.taskNames.collect { it.toLowerCase() }
+
+tasks.named('test') {
     useJUnitPlatform()
+    environment 'TESTCONTAINERS_REUSE_ENABLE', 'true'
+    onlyIf {
+        requestedTasks.any { it.contains('test') }
+    }
+    testLogging {
+        events "PASSED", "SKIPPED", "FAILED"
+        exceptionFormat = TestExceptionFormat.FULL
+        showStandardStreams true
+    }
 }
 
 tasks.register('printTestClasspath') {
@@ -66,22 +84,6 @@ tasks.register('updateAppVersionProperties') {
         }
         properties.setProperty("version", project.version.toString())
         appPropertiesFile.withWriter { properties.store(it, null) }
-    }
-}
-
-tasks.withType(Test).configureEach {
-    doFirst {
-        def envFile = file('.env')
-        if (envFile.exists()) {
-            Files.readAllLines(Paths.get(envFile.toURI())).each { line ->
-                if (line && !line.startsWith('#')) {
-                    def parts = line.split('=', 2)
-                    if (parts.length == 2) {
-                        environment parts[0].trim(), parts[1].trim()
-                    }
-                }
-            }
-        }
     }
 }
 

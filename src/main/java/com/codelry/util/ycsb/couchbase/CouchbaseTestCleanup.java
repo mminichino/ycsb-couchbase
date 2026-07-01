@@ -8,10 +8,14 @@ import static com.codelry.util.ycsb.couchbase.RetryLogic.retryVoid;
 import com.codelry.util.cbdb3.CouchbaseConnect;
 import com.codelry.util.cbdb3.CouchbaseConfig;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Clean Cluster after Testing.
  */
 public class CouchbaseTestCleanup extends TestCleanup {
+  static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseTestCleanup.class);
 
   @Override
   public void testClean(Properties properties) {
@@ -20,7 +24,7 @@ public class CouchbaseTestCleanup extends TestCleanup {
     db.connect(config);
 
     try {
-      System.err.printf("Removing bucket %s on cluster:[%s]\n", db.getBucketName(), db.hostValue());
+      LOGGER.info("Removing bucket {} on cluster:[{}]", db.getBucketName(), db.hostValue());
       retryVoid(db::dropBucket);
       db.disconnect();
     } catch (Exception e) {

@@ -4,6 +4,7 @@ import com.couchbase.client.core.error.InvalidArgumentException;
 import com.couchbase.client.core.msg.kv.CodecFlags;
 import com.couchbase.client.java.CommonOptions;
 import com.couchbase.client.java.codec.Transcoder;
+import com.couchbase.client.java.codec.TypeRef;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.couchbase.client.core.error.EncodingFailureException;
@@ -33,12 +34,8 @@ public class MapTranscoder implements Transcoder {
     if (input instanceof byte[]) {
       return new EncodedValue((byte[]) input, CodecFlags.JSON_COMPAT_FLAGS);
     } else if (input instanceof Map) {
-      ObjectMapper mapper = new ObjectMapper();
-      SimpleModule module = new SimpleModule("ByteIteratorSerializer");
-      module.addSerializer(ByteIterator.class, new ByteIteratorSerializer());
-      mapper.registerModule(module);
       try {
-        return new EncodedValue(mapper.writeValueAsBytes(input), CodecFlags.JSON_COMPAT_FLAGS);
+        return new EncodedValue(createMapper().writeValueAsBytes(input), CodecFlags.JSON_COMPAT_FLAGS);
       } catch (Throwable t) {
         throw new EncodingFailureException("Serializing of content + " + redactUser(input) + " to JSON failed.", t);
       }
@@ -53,18 +50,36 @@ public class MapTranscoder implements Transcoder {
     if (target.equals(byte[].class)) {
       return (T) input;
     } else if (target.equals(Map.class) || target.equals(HashMap.class)) {
-      ObjectMapper mapper = new ObjectMapper();
-      SimpleModule module = new SimpleModule("ByteIteratorDeserializer");
-      module.addDeserializer(ByteIterator.class, new ByteIteratorDeserializer());
-      mapper.registerModule(module);
-      TypeReference<Map<String, ByteIterator>> typeRef = new TypeReference<Map<String, ByteIterator>>() {};
+      TypeReference<Map<String, ByteIterator>> typeRef = new TypeReference<>() {};
       try {
-        return (T) mapper.readValue(new String(input, StandardCharsets.UTF_8), typeRef);
+        return (T) createMapper().readValue(new String(input, StandardCharsets.UTF_8), typeRef);
       } catch (Throwable e) {
         throw new DecodingFailureException(e);
       }
     } else {
       throw new DecodingFailureException("MapTranscoder can only decode into either byte[] or Map!");
     }
+  }
+
+  @Override
+  public <T> T decode(final TypeRef<T> target, final byte[] input, final int flags) {
+    if (target.type().equals(byte[].class)) {
+      return (T) input;
+    }
+    try {
+      ObjectMapper mapper = createMapper();
+      return mapper.readValue(input, mapper.constructType(target.type()));
+    } catch (Throwable e) {
+      throw new DecodingFailureException(e);
+    }
+  }
+
+  private ObjectMapper createMapper() {
+    ObjectMapper mapper = new ObjectMapper();
+    SimpleModule module = new SimpleModule("ByteIteratorCodec");
+    module.addSerializer(ByteIterator.class, new ByteIteratorSerializer());
+    module.addDeserializer(ByteIterator.class, new ByteIteratorDeserializer());
+    mapper.registerModule(module);
+    return mapper;
   }
 }
