@@ -7,7 +7,9 @@ key_stats.dat
 test.properties
 test.*.properties
 output.log
+ycsb.log
 output/
+.tmp/
 
 # ignore standard Eclipse files
 .project
@@ -48,3 +50,6 @@ buildNumber.properties
 
 # Ignore Gradle build output directory
 build
+
+# Ignore Kotlin plugin data
+.kotlin

@@ -1,0 +1,163 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
+plugins {
+    id 'java'
+    id 'java-library'
+    id 'distribution'
+    id 'application'
+    id 'org.jreleaser' version '1.24.0'
+}
+
+group = 'com.codelry.util.ycsb.couchbase'
+version = '3.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.codelry.util.ycsb:ycsb-core:0.18.4'
+    implementation 'com.codelry.util:restfull-core:1.0.5'
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.22.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.0'
+    implementation 'com.couchbase.client:java-client:3.12.0'
+    implementation 'com.google.code.gson:gson:2.14.0'
+    implementation 'com.codelry.util:couchbase-connect-sdk3:1.2.2'
+    implementation 'org.apache.logging.log4j:log4j-core:2.26.0'
+    implementation 'commons-cli:commons-cli:1.11.0'
+    implementation 'io.netty:netty-resolver-dns-native-macos:4.2.4.Final:osx-aarch_64'
+    implementation 'io.netty:netty-resolver-dns-native-macos:4.2.4.Final:osx-x86_64'
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+tasks.compileJava {
+    options.release = 17
+}
+
+tasks.named('javadoc') {
+    options {
+        addStringOption('Xdoclint:all,-missing', '-quiet')
+    }
+}
+
+def requestedTasks = gradle.startParameter.taskNames.collect { it.toLowerCase() }
+
+tasks.named('test') {
+    useJUnitPlatform()
+    environment 'TESTCONTAINERS_REUSE_ENABLE', 'true'
+    onlyIf {
+        requestedTasks.any { it.contains('test') }
+    }
+    testLogging {
+        events "PASSED", "SKIPPED", "FAILED"
+        exceptionFormat = TestExceptionFormat.FULL
+        showStandardStreams true
+    }
+}
+
+tasks.register('printTestClasspath') {
+    doLast {
+        println "Test Classpath:"
+        sourceSets.test.runtimeClasspath.each { file ->
+            println file.absolutePath
+        }
+    }
+}
+
+tasks.register('updateAppVersionProperties') {
+    doLast {
+        def appPropertiesFile = file("src/main/resources/project.properties")
+        def properties = new Properties()
+        if (appPropertiesFile.exists()) {
+            appPropertiesFile.withInputStream { properties.load(it) }
+        }
+        properties.setProperty("version", project.version.toString())
+        appPropertiesFile.withWriter { properties.store(it, null) }
+    }
+}
+
+sourceSets {
+    test {
+        resources {
+            srcDir 'src/test/conf'
+            include '**/*'
+        }
+    }
+}
+
+application {
+    mainClass = 'com.codelry.util.ycsb.RunBenchmark'
+    applicationDistribution.from("src/main/conf/") {
+        into "conf"
+    }
+}
+
+tasks.named('startScripts') {
+    def appName = project.name
+    doLast {
+        def scriptsDir = outputDir instanceof File ? outputDir : outputDir.asFile
+        def unixScript = new File(scriptsDir, appName)
+        if (!unixScript.text.contains('$APP_HOME/conf:')) {
+            unixScript.text = unixScript.text.replace(
+                    'CLASSPATH=$APP_HOME/',
+                    'CLASSPATH=$APP_HOME/conf:$APP_HOME/'
+            )
+        }
+
+        def windowsScript = new File(scriptsDir, "${appName}.bat")
+        if (!windowsScript.text.contains('%APP_HOME%\\conf;')) {
+            windowsScript.text = windowsScript.text.replace(
+                    'set CLASSPATH=%APP_HOME%\\',
+                    'set CLASSPATH=%APP_HOME%\\conf;%APP_HOME%\\'
+            )
+        }
+    }
+}
+
+tasks.named("distTar") {
+    compression = Compression.GZIP
+}
+
+jreleaser {
+    project {
+        name = 'ycsb-couchbase'
+        description = 'Couchbase YCSB implementation'
+        website = 'https://github.com/mminichino/ycsb-couchbase'
+        authors = ['Michael Minichino']
+        license = 'Apache-2.0'
+        copyright = "2026 Michael Minichino"
+    }
+
+    release {
+        github {
+            repoOwner = 'mminichino'
+            name = 'ycsb-couchbase'
+            branch = 'main'
+            changelog {
+                enabled = false
+            }
+        }
+    }
+
+    distributions {
+        app {
+            distributionType = 'JAVA_BINARY'
+            artifacts {
+                artifact {
+                    path = "build/distributions/{{projectName}}-{{projectVersion}}.zip"
+                }
+            }
+        }
+    }
+}
