@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.codelry.util.ycsb:ycsb-core:0.18.3'
+    implementation 'com.codelry.util.ycsb:ycsb-core:0.18.4'
     implementation 'com.codelry.util:restfull-core:1.0.5'
     implementation 'com.fasterxml.jackson.core:jackson-core:2.22.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.0'
@@ -103,20 +103,25 @@ application {
     }
 }
 
-tasks.named("startScripts") {
+tasks.named('startScripts') {
     def appName = project.name
     doLast {
-        def unixScript = new File(outputDir, appName)
-        unixScript.text = unixScript.text.replace(
-                'CLASSPATH=$APP_HOME/lib',
-                'CLASSPATH=$APP_HOME/conf:$APP_HOME/lib'
-        )
+        def scriptsDir = outputDir instanceof File ? outputDir : outputDir.asFile
+        def unixScript = new File(scriptsDir, appName)
+        if (!unixScript.text.contains('$APP_HOME/conf:')) {
+            unixScript.text = unixScript.text.replace(
+                    'CLASSPATH=$APP_HOME/',
+                    'CLASSPATH=$APP_HOME/conf:$APP_HOME/'
+            )
+        }
 
-        def windowsScript = new File(outputDir, "${appName}.bat")
-        windowsScript.text = windowsScript.text.replace(
-                'set CLASSPATH=%APP_HOME%\\lib',
-                'set CLASSPATH=%APP_HOME%\\conf;%APP_HOME%\\lib'
-        )
+        def windowsScript = new File(scriptsDir, "${appName}.bat")
+        if (!windowsScript.text.contains('%APP_HOME%\\conf;')) {
+            windowsScript.text = windowsScript.text.replace(
+                    'set CLASSPATH=%APP_HOME%\\',
+                    'set CLASSPATH=%APP_HOME%\\conf;%APP_HOME%\\'
+            )
+        }
     }
 }
 

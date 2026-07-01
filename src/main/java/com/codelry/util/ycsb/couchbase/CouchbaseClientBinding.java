@@ -14,8 +14,6 @@ import com.couchbase.client.java.codec.TypeRef;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.java.json.JsonArray;
 
-import java.io.IOException;
-import java.net.URL;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -34,8 +32,6 @@ import com.codelry.util.cbdb3.CouchbaseConnect;
  */
 public class CouchbaseClientBinding extends DB {
   protected static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseClientBinding.class);
-  private static final String PROPERTY_FILE = "db.properties";
-  private static final String PROPERTY_TEST = "test.properties";
   public static final String COUCHBASE_BUCKET = "couchbase.bucket";
   public static final String COUCHBASE_SCOPE = "couchbase.scope";
   public static final String COUCHBASE_COLLECTION = "couchbase.collection";
@@ -50,19 +46,7 @@ public class CouchbaseClientBinding extends DB {
 
   @Override
   public void init() throws DBException {
-    ClassLoader classloader = Thread.currentThread().getContextClassLoader();
-    URL propFile;
     Properties properties = new Properties();
-
-    if ((propFile = classloader.getResource(PROPERTY_FILE)) != null
-        || (propFile = classloader.getResource(PROPERTY_TEST)) != null) {
-      try {
-        properties.load(propFile.openStream());
-      } catch (IOException e) {
-        throw new DBException(e);
-      }
-    }
-
     properties.putAll(getProperties());
 
     String bucketName = properties.getProperty(COUCHBASE_BUCKET, "ycsb");
