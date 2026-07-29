@@ -35,7 +35,7 @@ public class CouchbaseTestSetup extends TestSetup {
       LOGGER.info("Creating collection {}", db.getCollectionName());
       retryVoid(db::createCollection);
       LOGGER.info("Creating index {} on {}", indexName, db.getCollectionName());
-      db.createSecondaryIndex(indexName, List.of("META().id"));
+      retryVoid(() -> db.createSecondaryIndex(indexName, List.of("META().id")));
       db.disconnect();
     } catch (Exception e) {
       throw new RuntimeException(e);
