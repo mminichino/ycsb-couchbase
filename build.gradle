@@ -9,7 +9,7 @@ plugins {
 }
 
 group = 'com.codelry.util.ycsb.couchbase'
-version = '3.0.0'
+version = '3.0.1'
 
 repositories {
     mavenCentral()

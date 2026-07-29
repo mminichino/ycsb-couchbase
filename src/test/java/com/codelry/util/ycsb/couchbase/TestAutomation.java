@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
-import static com.codelry.util.ycsb.Benchmark.DO_TRANSACTIONS_PROPERTY;
 import static com.codelry.util.ycsb.Benchmark.TEST_SETUP_PROPERTY;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -39,34 +38,34 @@ class TestAutomation {
    * {@code runTestSetup}, including {@code db.properties} from the runtime classpath.
    */
   private static Properties loadPropertiesForLoadPhase() {
-    return BenchmarkPropertiesLoader.load("a");
+    return BenchmarkPropertiesLoader.load();
   }
 
   private static final class BenchmarkPropertiesLoader extends Benchmark {
     private BenchmarkPropertiesLoader() {
     }
 
-    static Properties load(String workload) {
+    static Properties load() {
       Properties props = new Properties();
       props.setProperty(DO_TRANSACTIONS_PROPERTY, String.valueOf(false));
-      new BenchmarkPropertiesLoader().loadPropertiesFiles(workload, props);
-      loadPropertiesFromClasspath(props, DB_PROPERTY_FILE);
+      new BenchmarkPropertiesLoader().loadPropertiesFiles("a", props);
+      loadPropertiesFromClasspath(props);
       return props;
     }
   }
 
-  private static void loadPropertiesFromClasspath(Properties props, String propertyFile) {
+  private static void loadPropertiesFromClasspath(Properties props) {
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
     if (classLoader == null) {
       classLoader = TestAutomation.class.getClassLoader();
     }
-    try (InputStream in = classLoader.getResourceAsStream(propertyFile)) {
+    try (InputStream in = classLoader.getResourceAsStream(TestAutomation.DB_PROPERTY_FILE)) {
       if (in == null) {
-        throw new IllegalStateException("Properties resource not found on classpath: " + propertyFile);
+        throw new IllegalStateException("Properties resource not found on classpath: " + TestAutomation.DB_PROPERTY_FILE);
       }
       props.load(in);
     } catch (IOException e) {
-      throw new IllegalStateException("Cannot load properties file: " + propertyFile, e);
+      throw new IllegalStateException("Cannot load properties file: " + TestAutomation.DB_PROPERTY_FILE, e);
     }
   }
 }

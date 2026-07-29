@@ -1,8 +1,7 @@
 package com.codelry.util.ycsb.couchbase;
 
-import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
 import static com.couchbase.client.java.query.QueryOptions.queryOptions;
-import static com.couchbase.client.java.kv.GetOptions.getOptions;
+import static java.lang.Math.min;
 
 import com.codelry.util.cbdb3.CouchbaseConfig;
 import com.codelry.util.ycsb.*;
@@ -10,7 +9,6 @@ import com.couchbase.client.core.env.*;
 import com.couchbase.client.core.error.DocumentNotFoundException;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
-import com.couchbase.client.java.codec.TypeRef;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.java.json.JsonArray;
 
@@ -18,6 +16,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.couchbase.client.java.kv.*;
 import reactor.core.publisher.Mono;
 
 import org.apache.logging.log4j.Level;
@@ -37,11 +36,19 @@ public class CouchbaseClientBinding extends DB {
   public static final String COUCHBASE_COLLECTION = "couchbase.collection";
   private static final AtomicInteger OPEN_CLIENTS = new AtomicInteger(0);
   private static final Object INIT_COORDINATOR = new Object();
+  private static volatile Duration TTL = Duration.ofSeconds(0);
+  private static final GetOptions GET_OPTIONS = GetOptions.getOptions().transcoder(MapTranscoder.INSTANCE);
+  private static volatile MutateInOptions MUTATE_IN_OPTIONS = MutateInOptions.mutateInOptions()
+      .expiry(TTL)
+      .durability(DurabilityLevel.NONE);
+  private static volatile UpsertOptions UPSERT_OPTIONS = UpsertOptions.upsertOptions()
+      .expiry(TTL)
+      .durability(DurabilityLevel.NONE)
+      .transcoder(MapTranscoder.INSTANCE);
   private static volatile Cluster cluster;
   private static volatile Bucket bucket;
   private static volatile Collection collection;
-  private static String keySpace;
-  private static int ttlSeconds;
+  private static String query;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
 
   @Override
@@ -53,10 +60,22 @@ public class CouchbaseClientBinding extends DB {
     String scopeName = properties.getProperty(COUCHBASE_SCOPE, "_default");
     String collectionName = properties.getProperty(COUCHBASE_COLLECTION, "_default");
     boolean debug = getProperties().getProperty("couchbase.debug", "false").equals("true");
-    keySpace = bucketName + "." + scopeName + "." + collectionName;
+    String keySpace = bucketName + "." + scopeName + "." + collectionName;
+    query = "SELECT RAW META(t).id FROM " + keySpace + " AS t WHERE META(t).id >= $1 ORDER BY META(t).id LIMIT $2;";
     durability =
         setDurabilityLevel(Integer.parseInt(properties.getProperty("couchbase.durability", "0")));
-    ttlSeconds = Integer.parseInt(properties.getProperty("couchbase.ttlSeconds", "0"));
+    int ttlSeconds = Integer.parseInt(properties.getProperty("couchbase.ttlSeconds", "0"));
+
+    if (ttlSeconds > 0 || durability != DurabilityLevel.NONE) {
+      TTL = Duration.ofSeconds(ttlSeconds);
+      UPSERT_OPTIONS = UpsertOptions.upsertOptions()
+          .expiry(TTL)
+          .durability(durability)
+          .transcoder(MapTranscoder.INSTANCE);
+      MUTATE_IN_OPTIONS = MutateInOptions.mutateInOptions()
+          .expiry(TTL)
+          .durability(durability);
+    }
 
     if (debug) {
       Configurator.setLevel(LOGGER.getName(), Level.DEBUG);
@@ -111,7 +130,9 @@ public class CouchbaseClientBinding extends DB {
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     try {
-      result = collection.get(key, getOptions().transcoder(MapTranscoder.INSTANCE)).contentAs(new TypeRef<>() {});
+      @SuppressWarnings("unchecked")
+      Map<String, ByteIterator> doc = collection.get(key, GET_OPTIONS).contentAs(Map.class);
+      result.putAll(doc);
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug(result.toString());
       }
@@ -133,10 +154,11 @@ public class CouchbaseClientBinding extends DB {
   @Override
   public Status update(final String table, final String key, final Map<String, ByteIterator> values) {
     try {
-      collection.upsert(key, values,
-          upsertOptions().expiry(Duration.ofSeconds(ttlSeconds))
-              .durability(durability)
-              .transcoder(MapTranscoder.INSTANCE));
+      List<MutateInSpec> specs = new ArrayList<>(values.size());
+      for (Map.Entry<String, ByteIterator> e : values.entrySet()) {
+        specs.add(MutateInSpec.upsert(e.getKey(), e.getValue().toString()));
+      }
+      collection.mutateIn(key, specs, MUTATE_IN_OPTIONS);
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
@@ -153,10 +175,7 @@ public class CouchbaseClientBinding extends DB {
   @Override
   public Status insert(final String table, final String key, final Map<String, ByteIterator> values) {
     try {
-      collection.upsert(key, values,
-          upsertOptions().expiry(Duration.ofSeconds(ttlSeconds))
-              .durability(durability)
-              .transcoder(MapTranscoder.INSTANCE));
+      collection.upsert(key, values, UPSERT_OPTIONS);
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
@@ -191,43 +210,27 @@ public class CouchbaseClientBinding extends DB {
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
-    final String query = "SELECT RAW META(t).id FROM " + keySpace + " AS t WHERE META(t).id >= \"$1\" ORDER BY META(t).id LIMIT $2;";
     try {
-      Long scanned = cluster.reactive().query(query, queryOptions()
+      cluster.reactive().query(query, queryOptions()
               .adhoc(false)
+              .readonly(true)
+              .metrics(false)
               .parameters(JsonArray.from(startkey, recordcount)))
           .flatMapMany(reactiveQueryResult -> reactiveQueryResult.rowsAs(String.class))
-          .flatMap(docId -> collection.reactive().get(docId, getOptions().transcoder(MapTranscoder.INSTANCE))
+          .flatMapSequential(docId -> collection.reactive().get(docId, GET_OPTIONS)
               .map(getResult -> {
-                HashMap<String, ByteIterator> record = toScanRecord(getResult.contentAs(new TypeRef<>() {}), fields);
-                result.add(record);
+                @SuppressWarnings("unchecked")
+                HashMap<String, ByteIterator> record = getResult.contentAs(HashMap.class);
                 return record;
               })
-              .onErrorResume(DocumentNotFoundException.class, e -> Mono.empty()), 256)
-          .count()
+              .onErrorResume(DocumentNotFoundException.class, e -> Mono.empty()), min(256, recordcount))
+          .doOnNext(result::add)
+          .then()
           .block();
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("Scanned {} records", scanned != null ? scanned : 0);
-      }
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("scan transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
-    }
-  }
-
-  private HashMap<String, ByteIterator> toScanRecord(final Map<String, ByteIterator> document, final Set<String> fields) {
-    if (fields == null) {
-      return (HashMap<String, ByteIterator>) document;
-    } else {
-      final HashMap<String, ByteIterator> record = new HashMap<>(Math.max(4, (int)(fields.size() / 0.75f) + 1));
-      for (String field : fields) {
-        ByteIterator value = document.get(field);
-        if (value != null) {
-          record.put(field, value);
-        }
-      }
-      return record;
     }
   }
 }
