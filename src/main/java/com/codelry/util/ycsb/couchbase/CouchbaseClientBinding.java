@@ -92,7 +92,6 @@ public class CouchbaseClientBinding extends DB {
 
         cluster = db.getCluster();
         bucket = cluster.bucket(bucketName);
-        bucket.waitUntilReady(Duration.ofSeconds(5));
         collection = bucket.scope(scopeName).collection(collectionName);
       } catch(Exception e) {
         logError(e);
