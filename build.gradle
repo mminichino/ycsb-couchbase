@@ -9,14 +9,14 @@ plugins {
 }
 
 group = 'com.codelry.util.ycsb.couchbase'
-version = '3.0.1'
+version = '3.0.2'
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    implementation 'com.codelry.util.ycsb:ycsb-core:0.18.4'
+    implementation 'com.codelry.util.ycsb:ycsb-core:0.18.6'
     implementation 'com.codelry.util:restfull-core:1.0.5'
     implementation 'com.fasterxml.jackson.core:jackson-core:2.22.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.0'
@@ -76,16 +76,33 @@ tasks.register('printTestClasspath') {
 }
 
 tasks.register('updateAppVersionProperties') {
+    def appPropertiesFile = file("src/main/resources/project.properties")
+    def version = project.version.toString()
     doLast {
-        def appPropertiesFile = file("src/main/resources/project.properties")
         def properties = new Properties()
         if (appPropertiesFile.exists()) {
             appPropertiesFile.withInputStream { properties.load(it) }
         }
-        properties.setProperty("version", project.version.toString())
+        properties.setProperty("version", version)
         appPropertiesFile.withWriter { properties.store(it, null) }
     }
 }
+
+tasks.register('updateReadmeAppVersion') {
+    def readmeFile = file('README.md')
+    def version = project.version.toString()
+    doLast {
+        def text = readmeFile.getText('UTF-8')
+        text = text.replaceFirst(/(?m)^# Couchbase YCSB \d+\.\d+\.\d+/, "# Couchbase YCSB ${version}")
+        text = text.replaceAll(
+                /releases\/download\/v\d+\.\d+\.\d+\/ycsb-couchbase-\d+\.\d+\.\d+\.zip/,
+                "releases/download/v${version}/ycsb-couchbase-${version}.zip"
+        )
+        readmeFile.write(text, 'UTF-8')
+    }
+}
+
+processResources.dependsOn updateAppVersionProperties, updateReadmeAppVersion
 
 sourceSets {
     test {

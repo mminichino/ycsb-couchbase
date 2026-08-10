@@ -1,4 +1,4 @@
-# Couchbase YCSB 3.0.1
+# Couchbase YCSB 3.0.2
 This pacakge is a YCSB implementation to test against a Couchbase cluster. It uses YCSB core 0.18.0 and the Couchbase Java SDK v3.5.
 
 ## Requirements
@@ -15,7 +15,7 @@ for public cloud based DBaaS deployments.
 ### 2. Set up YCSB
 Download the distribution to begin testing.
 ```
-curl -OLs https://github.com/mminichino/ycsb-couchbase/releases/download/v3.0.1/ycsb-couchbase-3.0.1.zip
+curl -OLs https://github.com/mminichino/ycsb-couchbase/releases/download/v3.0.2/ycsb-couchbase-3.0.2.zip
 ```
 ```
 unzip ycsb-couchbase.zip
