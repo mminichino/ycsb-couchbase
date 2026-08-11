@@ -1,22 +1,20 @@
 package com.codelry.util.ycsb.couchbase;
 
 import com.codelry.util.ycsb.RunBenchmark;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 /**
  * Runs workload E end-to-end the way ycsb-core does: test setup, load, then transactions.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class TestWorkloadE {
+class TestWorkloadE extends AbstractServerPerTestTestcontainerTest {
 
   private static final String[] ARGS = {
       "-w", "workloade"
   };
 
   @Test
-  @Order(1)
   void testWorkloadE() {
     assertDoesNotThrow(() -> RunBenchmark.main(ARGS));
   }

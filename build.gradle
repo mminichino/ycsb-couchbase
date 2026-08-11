@@ -9,7 +9,7 @@ plugins {
 }
 
 group = 'com.codelry.util.ycsb.couchbase'
-version = '3.0.3'
+version = '3.0.4'
 
 repositories {
     mavenCentral()
@@ -22,7 +22,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.0'
     implementation 'com.couchbase.client:java-client:3.12.0'
     implementation 'com.google.code.gson:gson:2.14.0'
-    implementation 'com.codelry.util:couchbase-connect-sdk3:1.2.2'
+    implementation 'com.codelry.util:couchbase-connect-sdk3:1.2.3'
     implementation 'org.apache.logging.log4j:log4j-core:2.26.0'
     implementation 'commons-cli:commons-cli:1.11.0'
     implementation 'io.netty:netty-resolver-dns-native-macos:4.2.4.Final:osx-aarch_64'
@@ -56,6 +56,8 @@ def requestedTasks = gradle.startParameter.taskNames.collect { it.toLowerCase() 
 tasks.named('test') {
     useJUnitPlatform()
     environment 'TESTCONTAINERS_REUSE_ENABLE', 'true'
+    // Fixed Couchbase ports allow only one container at a time.
+    maxParallelForks = 1
     onlyIf {
         requestedTasks.any { it.contains('test') }
     }

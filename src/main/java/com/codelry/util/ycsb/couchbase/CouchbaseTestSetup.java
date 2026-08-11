@@ -33,15 +33,11 @@ public class CouchbaseTestSetup extends TestSetup {
     try {
       LOGGER.info("Creating bucket {} ({}) on cluster:[{}]", db.getBucketName(), config.getBucketStorage().toString(), db.hostValue());
       retryVoid(db::createBucket);
-      retryVoid(() -> {
-        Cluster cluster = db.getCluster();
-        Bucket bucket = cluster.bucket(db.getBucketName());
-        bucket.waitUntilReady(Duration.ofSeconds(10));
-      });
       LOGGER.info("Creating scope {}", db.getScopeName());
       retryVoid(db::createScope);
       LOGGER.info("Creating collection {}", db.getCollectionName());
       retryVoid(db::createCollection);
+      retryVoid(db::waitUntilCollectionQueryReady);
       LOGGER.info("Creating index {} on {}", indexName, db.getCollectionName());
       retryVoid(() -> db.createSecondaryIndex(indexName, List.of("META().id")));
       db.disconnect();

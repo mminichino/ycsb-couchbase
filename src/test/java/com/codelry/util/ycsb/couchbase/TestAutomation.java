@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 /**
  * Invokes {@link CouchbaseTestSetup} the same way ycsb-core does during the load phase.
  */
-class TestAutomation {
+class TestAutomation extends AbstractServerPerTestTestcontainerTest {
 
   private static final String DB_PROPERTY_FILE = "db.properties";
 

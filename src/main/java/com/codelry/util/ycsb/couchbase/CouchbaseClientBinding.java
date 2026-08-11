@@ -214,6 +214,7 @@ public class CouchbaseClientBinding extends DB {
               .adhoc(false)
               .readonly(true)
               .metrics(false)
+              .useReplica(true)
               .parameters(JsonArray.from(startkey, recordcount)))
           .flatMapMany(reactiveQueryResult -> reactiveQueryResult.rowsAs(String.class))
           .flatMapSequential(docId -> collection.reactive().get(docId, GET_OPTIONS)
