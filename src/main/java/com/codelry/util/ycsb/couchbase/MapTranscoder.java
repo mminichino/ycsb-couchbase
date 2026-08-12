@@ -24,7 +24,9 @@ public class MapTranscoder implements Transcoder {
   private static final ObjectMapper mapper;
   private static final ObjectWriter writer;
   private static final ObjectReader mapReader;
+  private static final ObjectReader hashMapReader;
   private static final TypeReference<Map<String, ByteIterator>> mapTypeRef = new TypeReference<>() {};
+  private static final TypeReference<HashMap<String, ByteIterator>> hashMapTypeRef = new TypeReference<>() {};
   public static final MapTranscoder INSTANCE;
 
   static {
@@ -35,7 +37,19 @@ public class MapTranscoder implements Transcoder {
     mapper.registerModule(module);
     writer = mapper.writer();
     mapReader = mapper.readerFor(mapTypeRef);
+    hashMapReader = mapper.readerFor(hashMapTypeRef);
     INSTANCE = new MapTranscoder();
+  }
+
+  /**
+   * Decode a document body into a YCSB record in a single Jackson pass.
+   */
+  public static HashMap<String, ByteIterator> decodeRecord(byte[] json) {
+    try {
+      return hashMapReader.readValue(json);
+    } catch (Throwable e) {
+      throw new DecodingFailureException(e);
+    }
   }
 
   private MapTranscoder() {

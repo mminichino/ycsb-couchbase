@@ -18,6 +18,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.couchbase.client.java.kv.*;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
@@ -38,6 +40,8 @@ public class CouchbaseClientBinding extends DB {
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Duration TTL = Duration.ofSeconds(0);
   private static final GetOptions GET_OPTIONS = GetOptions.getOptions().transcoder(MapTranscoder.INSTANCE);
+  private static final Scheduler SCAN_DECODE_SCHEDULER =
+      Schedulers.newParallel("ycsb-scan-decode", Runtime.getRuntime().availableProcessors());
   private static volatile MutateInOptions MUTATE_IN_OPTIONS = MutateInOptions.mutateInOptions()
       .expiry(TTL)
       .durability(DurabilityLevel.NONE);
@@ -217,12 +221,9 @@ public class CouchbaseClientBinding extends DB {
               .useReplica(true)
               .parameters(JsonArray.from(startkey, recordcount)))
           .flatMapMany(reactiveQueryResult -> reactiveQueryResult.rowsAs(String.class))
-          .flatMapSequential(docId -> collection.reactive().get(docId, GET_OPTIONS)
-              .map(getResult -> {
-                @SuppressWarnings("unchecked")
-                HashMap<String, ByteIterator> record = getResult.contentAs(HashMap.class);
-                return record;
-              })
+          .flatMapSequential(docId -> collection.reactive().get(docId)
+              .map(GetResult::contentAsBytes)
+              .map(MapTranscoder::decodeRecord)
               .onErrorResume(DocumentNotFoundException.class, e -> Mono.empty()), min(256, recordcount))
           .doOnNext(result::add)
           .then()
