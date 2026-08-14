@@ -52,6 +52,22 @@ public class MapTranscoder implements Transcoder {
     }
   }
 
+  public static Map<String, ByteIterator> decodeMapRecord(byte[] json) {
+    try {
+      return mapReader.readValue(json);
+    } catch (Throwable e) {
+      throw new DecodingFailureException(e);
+    }
+  }
+
+  public static byte[] encodeMapRecord(Map<String, ByteIterator> map) {
+    try {
+      return new EncodedValue(writer.writeValueAsBytes(map), CodecFlags.JSON_COMPAT_FLAGS).encoded();
+    } catch (Throwable t) {
+      throw new EncodingFailureException("Serializing of content + " + redactUser(map) + " to JSON failed.", t);
+    }
+  }
+
   private MapTranscoder() {
     super();
   }
@@ -77,13 +93,12 @@ public class MapTranscoder implements Transcoder {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public <T> T decode(final Class<T> target, final byte[] input, int flags) {
     if (target.equals(byte[].class)) {
       return (T) input;
     } else if (target.equals(Map.class) || target.equals(HashMap.class)) {
       try {
-        return (T) mapReader.readValue(input);
+        return mapReader.readValue(input);
       } catch (Throwable e) {
         throw new DecodingFailureException(e);
       }

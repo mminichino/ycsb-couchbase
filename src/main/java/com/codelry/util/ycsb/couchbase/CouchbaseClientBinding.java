@@ -10,6 +10,7 @@ import com.couchbase.client.core.error.DocumentNotFoundException;
 import com.couchbase.client.java.*;
 import com.couchbase.client.java.Collection;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
+import com.couchbase.client.java.codec.RawJsonTranscoder;
 import com.couchbase.client.java.json.JsonArray;
 
 import java.time.Duration;
@@ -18,8 +19,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.couchbase.client.java.kv.*;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Scheduler;
-import reactor.core.scheduler.Schedulers;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
@@ -39,16 +38,13 @@ public class CouchbaseClientBinding extends DB {
   private static final AtomicInteger OPEN_CLIENTS = new AtomicInteger(0);
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Duration TTL = Duration.ofSeconds(0);
-  private static final GetOptions GET_OPTIONS = GetOptions.getOptions().transcoder(MapTranscoder.INSTANCE);
-  private static final Scheduler SCAN_DECODE_SCHEDULER =
-      Schedulers.newParallel("ycsb-scan-decode", Runtime.getRuntime().availableProcessors());
   private static volatile MutateInOptions MUTATE_IN_OPTIONS = MutateInOptions.mutateInOptions()
       .expiry(TTL)
       .durability(DurabilityLevel.NONE);
   private static volatile UpsertOptions UPSERT_OPTIONS = UpsertOptions.upsertOptions()
+      .transcoder(RawJsonTranscoder.INSTANCE)
       .expiry(TTL)
-      .durability(DurabilityLevel.NONE)
-      .transcoder(MapTranscoder.INSTANCE);
+      .durability(DurabilityLevel.NONE);
   private static volatile Cluster cluster;
   private static volatile Bucket bucket;
   private static volatile Collection collection;
@@ -73,9 +69,9 @@ public class CouchbaseClientBinding extends DB {
     if (ttlSeconds > 0 || durability != DurabilityLevel.NONE) {
       TTL = Duration.ofSeconds(ttlSeconds);
       UPSERT_OPTIONS = UpsertOptions.upsertOptions()
+          .transcoder(RawJsonTranscoder.INSTANCE)
           .expiry(TTL)
-          .durability(durability)
-          .transcoder(MapTranscoder.INSTANCE);
+          .durability(durability);
       MUTATE_IN_OPTIONS = MutateInOptions.mutateInOptions()
           .expiry(TTL)
           .durability(durability);
@@ -133,9 +129,8 @@ public class CouchbaseClientBinding extends DB {
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     try {
-      @SuppressWarnings("unchecked")
-      Map<String, ByteIterator> doc = collection.get(key, GET_OPTIONS).contentAs(Map.class);
-      result.putAll(doc);
+      byte[] doc = collection.get(key).contentAsBytes();
+      result.putAll(MapTranscoder.decodeMapRecord(doc));
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug(result.toString());
       }
@@ -178,7 +173,7 @@ public class CouchbaseClientBinding extends DB {
   @Override
   public Status insert(final String table, final String key, final Map<String, ByteIterator> values) {
     try {
-      collection.upsert(key, values, UPSERT_OPTIONS);
+      collection.upsert(key, MapTranscoder.encodeMapRecord(values), UPSERT_OPTIONS);
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
@@ -214,7 +209,7 @@ public class CouchbaseClientBinding extends DB {
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
     try {
-      cluster.reactive().query(query, queryOptions()
+      List<byte[]> docs = cluster.reactive().query(query, queryOptions()
               .adhoc(false)
               .readonly(true)
               .metrics(false)
@@ -223,11 +218,11 @@ public class CouchbaseClientBinding extends DB {
           .flatMapMany(reactiveQueryResult -> reactiveQueryResult.rowsAs(String.class))
           .flatMapSequential(docId -> collection.reactive().get(docId)
               .map(GetResult::contentAsBytes)
-              .map(MapTranscoder::decodeRecord)
               .onErrorResume(DocumentNotFoundException.class, e -> Mono.empty()), min(256, recordcount))
-          .doOnNext(result::add)
-          .then()
+          .collectList()
           .block();
+      assert docs != null;
+      result.addAll(docs.stream().map(MapTranscoder::decodeRecord).toList());
       return Status.OK;
     } catch (Throwable t) {
       LOGGER.error("scan transaction exception: {}", t.getMessage(), t);

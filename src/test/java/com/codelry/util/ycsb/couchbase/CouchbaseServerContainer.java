@@ -14,7 +14,7 @@ import java.util.List;
  * Couchbase Server Testcontainers helper, adapted from couchbase-connect-sdk3 Server tests.
  */
 final class CouchbaseServerContainer {
-  static final String IMAGE = "couchbase/server:enterprise-8.0.1";
+  static final String IMAGE = "couchbase/server:enterprise-8.0.2";
   private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseServerContainer.class);
 
   private CouchbaseServerContainer() {}
