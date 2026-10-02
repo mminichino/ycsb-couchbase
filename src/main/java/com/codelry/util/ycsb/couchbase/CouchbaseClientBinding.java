@@ -84,7 +84,7 @@ public class CouchbaseClientBinding extends DB {
     synchronized (INIT_COORDINATOR) {
       try {
         CouchbaseConfig config = new CouchbaseConfig().fromProperties(properties)
-            .kvTimeout(10)
+            .kvTimeout(20)
             .connectTimeout(20)
             .queryTimeout(90);
         CouchbaseConnect db = CouchbaseConnect.getInstance();
