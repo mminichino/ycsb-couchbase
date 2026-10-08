@@ -158,6 +158,8 @@ public class CouchbaseClientBinding extends DB {
       }
       collection.mutateIn(key, specs, MUTATE_IN_OPTIONS);
       return Status.OK;
+    } catch (DocumentNotFoundException e) {
+      return Status.NOT_FOUND;
     } catch (Throwable t) {
       LOGGER.error("update transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
@@ -191,6 +193,8 @@ public class CouchbaseClientBinding extends DB {
     try {
       collection.remove(key);
       return Status.OK;
+    } catch (DocumentNotFoundException e) {
+      return Status.NOT_FOUND;
     } catch (Throwable t) {
       LOGGER.error("delete transaction exception: {}", t.getMessage(), t);
       return Status.ERROR;
