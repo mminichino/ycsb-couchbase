@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package com.codelry.util.ycsb.couchbase;
+
+option java_package = "com.codelry.util.ycsb.couchbase";
+option java_outer_classname = "YcsbRecordProto";
+option java_multiple_files = true;
+
+// YCSB record stored as a map of field name to raw field bytes.
+message YcsbRecord {
+  map<string, bytes> fields = 1;
+}

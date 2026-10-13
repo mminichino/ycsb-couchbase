@@ -1,31 +1,27 @@
 package com.codelry.util.ycsb.couchbase;
 
-import static com.couchbase.client.java.query.QueryOptions.queryOptions;
-import static java.lang.Math.min;
-
 import com.codelry.util.cbdb3.CouchbaseConfig;
-import com.codelry.util.ycsb.*;
-import com.couchbase.client.core.env.*;
-import com.couchbase.client.core.error.DocumentNotFoundException;
-import com.couchbase.client.java.*;
-import com.couchbase.client.java.Collection;
+import com.codelry.util.cbdb3.CouchbaseConnect;
+import com.codelry.util.ycsb.ByteIterator;
+import com.codelry.util.ycsb.DB;
+import com.codelry.util.ycsb.DBException;
+import com.codelry.util.ycsb.Status;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
-import com.couchbase.client.java.codec.RawJsonTranscoder;
-import com.couchbase.client.java.json.JsonArray;
-
-import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import com.couchbase.client.java.kv.*;
-import reactor.core.publisher.Mono;
-
+import com.couchbase.client.java.Bucket;
+import com.couchbase.client.java.Cluster;
+import com.couchbase.client.java.Collection;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codelry.util.cbdb3.CouchbaseConnect;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.Vector;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A class that implements the Couchbase Java SDK to be used with YCSB.
@@ -35,21 +31,17 @@ public class CouchbaseClientBinding extends DB {
   public static final String COUCHBASE_BUCKET = "couchbase.bucket";
   public static final String COUCHBASE_SCOPE = "couchbase.scope";
   public static final String COUCHBASE_COLLECTION = "couchbase.collection";
+  public static final String COUCHBASE_RECORDSTORE = "couchbase.recordstore";
   private static final AtomicInteger OPEN_CLIENTS = new AtomicInteger(0);
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Duration TTL = Duration.ofSeconds(0);
-  private static volatile MutateInOptions MUTATE_IN_OPTIONS = MutateInOptions.mutateInOptions()
-      .expiry(TTL)
-      .durability(DurabilityLevel.NONE);
-  private static volatile UpsertOptions UPSERT_OPTIONS = UpsertOptions.upsertOptions()
-      .transcoder(RawJsonTranscoder.INSTANCE)
-      .expiry(TTL)
-      .durability(DurabilityLevel.NONE);
   private static volatile Cluster cluster;
   private static volatile Bucket bucket;
   private static volatile Collection collection;
   private static String query;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
+
+  private RecordStore recordStore;
 
   @Override
   public void init() throws DBException {
@@ -59,23 +51,14 @@ public class CouchbaseClientBinding extends DB {
     String bucketName = properties.getProperty(COUCHBASE_BUCKET, "ycsb");
     String scopeName = properties.getProperty(COUCHBASE_SCOPE, "_default");
     String collectionName = properties.getProperty(COUCHBASE_COLLECTION, "_default");
+    String recordStoreType = properties.getProperty(COUCHBASE_RECORDSTORE, "json").toLowerCase();
     boolean debug = getProperties().getProperty("couchbase.debug", "false").equals("true");
     String keySpace = bucketName + "." + scopeName + "." + collectionName;
     query = "SELECT RAW META(t).id FROM " + keySpace + " AS t WHERE META(t).id >= $1 ORDER BY META(t).id LIMIT $2;";
     durability =
         setDurabilityLevel(Integer.parseInt(properties.getProperty("couchbase.durability", "0")));
     int ttlSeconds = Integer.parseInt(properties.getProperty("couchbase.ttlSeconds", "0"));
-
-    if (ttlSeconds > 0 || durability != DurabilityLevel.NONE) {
-      TTL = Duration.ofSeconds(ttlSeconds);
-      UPSERT_OPTIONS = UpsertOptions.upsertOptions()
-          .transcoder(RawJsonTranscoder.INSTANCE)
-          .expiry(TTL)
-          .durability(durability);
-      MUTATE_IN_OPTIONS = MutateInOptions.mutateInOptions()
-          .expiry(TTL)
-          .durability(durability);
-    }
+    TTL = Duration.ofSeconds(ttlSeconds);
 
     if (debug) {
       Configurator.setLevel(LOGGER.getName(), Level.DEBUG);
@@ -93,13 +76,23 @@ public class CouchbaseClientBinding extends DB {
         cluster = db.getCluster();
         bucket = cluster.bucket(bucketName);
         collection = bucket.scope(scopeName).collection(collectionName);
-      } catch(Exception e) {
+      } catch (Exception e) {
         logError(e);
         throw new DBException(e);
       }
     }
 
+    recordStore = createRecordStore(recordStoreType);
     OPEN_CLIENTS.incrementAndGet();
+  }
+
+  private RecordStore createRecordStore(String recordStoreType) throws DBException {
+    return switch (recordStoreType) {
+      case "json" -> new JsonRecordStore(cluster, collection, query, TTL, durability);
+      case "protobuf" -> new ProtobufRecordStore(cluster, collection, query, TTL, durability);
+      default -> throw new DBException("Unknown couchbase.recordstore value: " + recordStoreType
+          + " (expected json or protobuf)");
+    };
   }
 
   private void logError(Exception error) {
@@ -117,120 +110,34 @@ public class CouchbaseClientBinding extends DB {
 
   @Override
   public synchronized void cleanup() {
+    if (recordStore != null) {
+      recordStore.disconnect();
+    }
   }
 
-  /**
-   * Perform key/value read ("get").
-   * @param table The name of the table.
-   * @param key The record key of the record to read.
-   * @param fields The list of fields to read or null for all of them.
-   * @param result A Map of field/value pairs for the result.
-   */
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
-    try {
-      byte[] doc = collection.get(key).contentAsBytes();
-      result.putAll(MapTranscoder.decodeMapRecord(doc));
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug(result.toString());
-      }
-      return Status.OK;
-    } catch (DocumentNotFoundException e) {
-      return Status.NOT_FOUND;
-    } catch (Throwable t) {
-      LOGGER.error("read transaction exception: {}", t.getMessage(), t);
-      return Status.ERROR;
-    }
+    return recordStore.read(table, key, fields, result);
   }
 
-  /**
-   * Update record.
-   * @param table The name of the table.
-   * @param key The record key of the record to write.
-   * @param values A HashMap of field/value pairs to update in the record.
-   */
   @Override
   public Status update(final String table, final String key, final Map<String, ByteIterator> values) {
-    try {
-      List<MutateInSpec> specs = new ArrayList<>(values.size());
-      for (Map.Entry<String, ByteIterator> e : values.entrySet()) {
-        specs.add(MutateInSpec.upsert(e.getKey(), e.getValue().toString()));
-      }
-      collection.mutateIn(key, specs, MUTATE_IN_OPTIONS);
-      return Status.OK;
-    } catch (DocumentNotFoundException e) {
-      return Status.NOT_FOUND;
-    } catch (Throwable t) {
-      LOGGER.error("update transaction exception: {}", t.getMessage(), t);
-      return Status.ERROR;
-    }
+    return recordStore.update(table, key, values);
   }
 
-  /**
-   * Insert a record.
-   * @param table The name of the table.
-   * @param key The record key of the record to insert.
-   * @param values A HashMap of field/value pairs to insert in the record.
-   */
   @Override
   public Status insert(final String table, final String key, final Map<String, ByteIterator> values) {
-    try {
-      collection.upsert(key, MapTranscoder.encodeMapRecord(values), UPSERT_OPTIONS);
-      return Status.OK;
-    } catch (Throwable t) {
-      LOGGER.error("update transaction exception: {}", t.getMessage(), t);
-      return Status.ERROR;
-    }
+    return recordStore.insert(table, key, values);
   }
 
-  /**
-   * Remove a record.
-   * @param table The name of the table.
-   * @param key The record key of the record to delete.
-   */
   @Override
   public Status delete(final String table, final String key) {
-    try {
-      collection.remove(key);
-      return Status.OK;
-    } catch (DocumentNotFoundException e) {
-      return Status.NOT_FOUND;
-    } catch (Throwable t) {
-      LOGGER.error("delete transaction exception: {}", t.getMessage(), t);
-      return Status.ERROR;
-    }
+    return recordStore.delete(table, key);
   }
 
-  /**
-   * Query for specific rows of data using SQL++.
-   * @param table The name of the table.
-   * @param startkey The record key of the first record to read.
-   * @param recordcount The number of records to read.
-   * @param fields The list of fields to read or null for all of them.
-   * @param result A Vector of HashMaps, where each HashMap is a set of field/value pairs for one record.
-   */
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
                      final Vector<HashMap<String, ByteIterator>> result) {
-    try {
-      List<byte[]> docs = cluster.reactive().query(query, queryOptions()
-              .adhoc(false)
-              .readonly(true)
-              .metrics(false)
-              .useReplica(true)
-              .parameters(JsonArray.from(startkey, recordcount)))
-          .flatMapMany(reactiveQueryResult -> reactiveQueryResult.rowsAs(String.class))
-          .flatMapSequential(docId -> collection.reactive().get(docId)
-              .map(GetResult::contentAsBytes)
-              .onErrorResume(DocumentNotFoundException.class, e -> Mono.empty()), min(256, recordcount))
-          .collectList()
-          .block();
-      assert docs != null;
-      result.addAll(docs.stream().map(MapTranscoder::decodeRecord).toList());
-      return Status.OK;
-    } catch (Throwable t) {
-      LOGGER.error("scan transaction exception: {}", t.getMessage(), t);
-      return Status.ERROR;
-    }
+    return recordStore.scan(table, startkey, recordcount, fields, result);
   }
 }
