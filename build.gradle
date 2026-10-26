@@ -14,9 +14,11 @@ version = '3.0.4'
 
 repositories {
     mavenCentral()
+    maven { url 'https://mobile.maven.couchbase.com/maven2/dev/' }
 }
 
 def protobufVersion = '4.29.3'
+def cbliteVersion = '4.1.2'
 
 dependencies {
     implementation 'com.codelry.util.ycsb:ycsb-core:0.18.8'
@@ -24,6 +26,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-core:2.22.3'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
     implementation 'com.couchbase.client:java-client:3.12.3'
+    implementation "com.couchbase.lite:couchbase-lite-java-ee:${cbliteVersion}"
     implementation 'com.google.code.gson:gson:2.14.0'
     implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
     implementation 'com.codelry.util:couchbase-connect-sdk3:1.2.6'

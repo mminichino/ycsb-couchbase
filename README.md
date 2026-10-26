@@ -114,3 +114,18 @@ Connection properties are provided by [couchbase-connect-sdk3](https://central.s
 | capella.user.email                | None                    | Capella user email for API authentication                                             |
 | capella.user.id                   | None                    | Capella user ID for API authentication                                                |
 | capella.api.host                  | None                    | Capella API host override                                                             |
+
+## Couchbase Lite on Linux
+The optional Couchbase Lite binding needs Couchbase's Linux support libraries (ICU) at runtime. These are not bundled in the distribution.
+
+1. Download the support libs zip that matches the Lite version used by this project (currently 4.1.2):
+   `https://packages.couchbase.com/releases/couchbase-lite-java/4.1.2/couchbase-lite-java-linux-supportlibs-4.1.2.zip`
+2. Unpack it to a directory of your choice.
+3. Point the dynamic linker at that directory before running YCSB:
+
+```
+export LD_LIBRARY_PATH=/path/to/unpacked-support-libs:$LD_LIBRARY_PATH
+bin/ycsb-couchbase
+```
+
+See also the [Couchbase Lite Java Linux prerequisites](https://docs.couchbase.com/couchbase-lite/current/java/gs-prereqs.html).

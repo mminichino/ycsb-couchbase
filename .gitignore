@@ -48,6 +48,10 @@ buildNumber.properties
 # Ignore Gradle project-specific cache directory
 .gradle
 
+# Ignore local Couchbase Lite databases and temp files
+.couchbase/
+CouchbaseLiteTemp/
+
 # Ignore Gradle build output directory
 build
 
