@@ -10,6 +10,8 @@ import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.java.Bucket;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.Collection;
+import com.couchbase.client.java.kv.GetAnyReplicaOptions;
+import com.couchbase.client.java.kv.ReadPreference;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
 import org.slf4j.Logger;
@@ -32,6 +34,7 @@ public class CouchbaseClientBinding extends DB {
   public static final String COUCHBASE_SCOPE = "couchbase.scope";
   public static final String COUCHBASE_COLLECTION = "couchbase.collection";
   public static final String COUCHBASE_RECORDSTORE = "couchbase.recordstore";
+  public static final String COUCHBASE_PREFERRED_SERVER_GROUP = "couchbase.preferredServerGroup";
   private static final AtomicInteger OPEN_CLIENTS = new AtomicInteger(0);
   private static final Object INIT_COORDINATOR = new Object();
   private static volatile Duration TTL = Duration.ofSeconds(0);
@@ -40,6 +43,7 @@ public class CouchbaseClientBinding extends DB {
   private static volatile Collection collection;
   private static String query;
   private static volatile DurabilityLevel durability = DurabilityLevel.NONE;
+  private static volatile GetAnyReplicaOptions options;
 
   private RecordStore recordStore;
 
@@ -59,6 +63,11 @@ public class CouchbaseClientBinding extends DB {
         setDurabilityLevel(Integer.parseInt(properties.getProperty("couchbase.durability", "0")));
     int ttlSeconds = Integer.parseInt(properties.getProperty("couchbase.ttlSeconds", "0"));
     TTL = Duration.ofSeconds(ttlSeconds);
+    String preferredServerGroup = properties.getProperty(COUCHBASE_PREFERRED_SERVER_GROUP);
+    options = GetAnyReplicaOptions.getAnyReplicaOptions();
+    if (preferredServerGroup != null && !preferredServerGroup.isBlank()) {
+      options.readPreference(ReadPreference.PREFERRED_SERVER_GROUP);
+    }
 
     if (debug) {
       Configurator.setLevel(LOGGER.getName(), Level.DEBUG);
@@ -90,8 +99,10 @@ public class CouchbaseClientBinding extends DB {
     return switch (recordStoreType) {
       case "json" -> new JsonRecordStore(cluster, collection, query, TTL, durability);
       case "protobuf" -> new ProtobufRecordStore(cluster, collection, query, TTL, durability);
+      case "replicaread" -> new ReplicaReadRecordStore(cluster, collection, query, TTL, durability,
+          options);
       default -> throw new DBException("Unknown couchbase.recordstore value: " + recordStoreType
-          + " (expected json or protobuf)");
+          + " (expected json, protobuf, or replicaread)");
     };
   }
 

@@ -57,3 +57,7 @@ build
 
 # Ignore Kotlin plugin data
 .kotlin
+
+# Project
+.cursorrules
+.cursor/
