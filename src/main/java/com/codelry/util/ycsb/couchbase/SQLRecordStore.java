@@ -4,7 +4,6 @@ import static com.couchbase.client.java.query.QueryOptions.queryOptions;
 
 import com.codelry.util.ycsb.ByteIterator;
 import com.codelry.util.ycsb.Status;
-import com.couchbase.client.core.error.CasMismatchException;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.json.JsonArray;
@@ -36,7 +35,6 @@ public class SQLRecordStore implements RecordStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(SQLRecordStore.class);
 
   public static final int DEFAULT_BATCH_SIZE = 100;
-  private static final int UPDATE_CAS_RETRIES = 5;
 
   private final Cluster cluster;
   private final Duration ttl;
@@ -69,15 +67,18 @@ public class SQLRecordStore implements RecordStore {
       this.upsertQuery = "UPSERT INTO " + keySpace + " (KEY, VALUE) VALUES ($1, $2)";
       this.batchUpsertQuery = "UPSERT INTO " + keySpace
           + " (KEY k, VALUE v) SELECT d.k AS k, d.v AS v FROM $docs AS d";
-      this.updateQuery = "UPDATE " + keySpace
-          + " AS t USE KEYS [$1] SET t = OBJECT_CONCAT(t, $2)";
+      // UPSERT overwrite avoids CAS mismatch under concurrent updates (last write wins).
+      this.updateQuery = "UPSERT INTO " + keySpace
+          + " (KEY k, VALUE v) SELECT META(t).id AS k, OBJECT_CONCAT(t, $2) AS v"
+          + " FROM " + keySpace + " AS t USE KEYS [$1]";
     } else {
       this.upsertQuery = "UPSERT INTO " + keySpace + " (KEY, VALUE, OPTIONS) VALUES ($1, $2, $3)";
       this.batchUpsertQuery = "UPSERT INTO " + keySpace
           + " (KEY k, VALUE v, OPTIONS o) SELECT d.k AS k, d.v AS v, {\"expiration\": "
           + ttl.getSeconds() + "} AS o FROM $docs AS d";
-      this.updateQuery = "UPDATE " + keySpace
-          + " AS t USE KEYS [$1] SET t = OBJECT_CONCAT(t, $2), META(t).expiration = $3";
+      this.updateQuery = "UPSERT INTO " + keySpace
+          + " (KEY k, VALUE v, OPTIONS o) SELECT META(t).id AS k, OBJECT_CONCAT(t, $2) AS v, $3 AS o"
+          + " FROM " + keySpace + " AS t USE KEYS [$1]";
     }
   }
 
@@ -118,32 +119,19 @@ public class SQLRecordStore implements RecordStore {
     if (!flushed.isOk()) {
       return flushed;
     }
-    JsonObject patch = JsonObject.fromJson(MapTranscoder.encodeMapRecord(values));
-    JsonArray params = ttl.isZero()
-        ? JsonArray.from(key, patch)
-        : JsonArray.from(key, patch, ttl.getSeconds());
-    int attempts = 0;
-    while (true) {
-      try {
-        QueryResult queryResult = cluster.query(updateQuery, mutationOptions(params));
-        if (mutationCount(queryResult) == 0) {
-          return Status.NOT_FOUND;
-        }
-        return Status.OK;
-      } catch (Throwable t) {
-        attempts++;
-        if (attempts >= UPDATE_CAS_RETRIES || !isTransientCasMismatch(t)) {
-          LOGGER.error("update transaction exception: {}", t.getMessage(), t);
-          return Status.ERROR;
-        }
-        try {
-          Thread.sleep(10L * attempts);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-          LOGGER.error("update CAS retry interrupted: {}", t.getMessage(), t);
-          return Status.ERROR;
-        }
+    try {
+      JsonObject patch = JsonObject.fromJson(MapTranscoder.encodeMapRecord(values));
+      JsonArray params = ttl.isZero()
+          ? JsonArray.from(key, patch)
+          : JsonArray.from(key, patch, JsonObject.create().put("expiration", ttl.getSeconds()));
+      QueryResult queryResult = cluster.query(updateQuery, mutationOptions(params));
+      if (mutationCount(queryResult) == 0) {
+        return Status.NOT_FOUND;
       }
+      return Status.OK;
+    } catch (Throwable t) {
+      LOGGER.error("update transaction exception: {}", t.getMessage(), t);
+      return Status.ERROR;
     }
   }
 
@@ -275,14 +263,6 @@ public class SQLRecordStore implements RecordStore {
   private static boolean isTransientIndexError(Throwable t) {
     String message = String.valueOf(t.getMessage());
     return message.contains("Index not found") || message.contains("indexing.error");
-  }
-
-  private static boolean isTransientCasMismatch(Throwable t) {
-    if (t instanceof CasMismatchException) {
-      return true;
-    }
-    String message = String.valueOf(t.getMessage());
-    return message.contains("CAS mismatch") || message.contains("CAS_mismatch");
   }
 
   private QueryOptions mutationOptions(JsonArray params) {
