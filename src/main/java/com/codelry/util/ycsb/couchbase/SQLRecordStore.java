@@ -4,12 +4,14 @@ import static com.couchbase.client.java.query.QueryOptions.queryOptions;
 
 import com.codelry.util.ycsb.ByteIterator;
 import com.codelry.util.ycsb.Status;
+import com.couchbase.client.core.error.CasMismatchException;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.json.JsonArray;
 import com.couchbase.client.java.json.JsonObject;
 import com.couchbase.client.java.query.QueryOptions;
 import com.couchbase.client.java.query.QueryResult;
+import com.couchbase.client.java.query.QueryScanConsistency;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,8 +24,9 @@ import java.util.Set;
 import java.util.Vector;
 
 /**
- * JSON record store that performs all YCSB operations via SQL++ queries keyed on {@code META().id}
- * (no KV API). Documents use the same {@link MapTranscoder} serialization as {@link JsonRecordStore}.
+ * JSON record store that performs all YCSB operations via SQL++ (no KV API).
+ * Point ops use {@code USE KEYS}; range scan uses {@code META().id} against the setup index.
+ * Documents use the same {@link MapTranscoder} serialization as {@link JsonRecordStore}.
  *
  * <p>Inserts are buffered and flushed in SQL++ multi-document {@code UPSERT} batches of
  * {@link #DEFAULT_BATCH_SIZE} (configurable via {@code batchsize}), matching the YCSB postgres
@@ -33,6 +36,7 @@ public class SQLRecordStore implements RecordStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(SQLRecordStore.class);
 
   public static final int DEFAULT_BATCH_SIZE = 100;
+  private static final int UPDATE_CAS_RETRIES = 5;
 
   private final Cluster cluster;
   private final Duration ttl;
@@ -57,23 +61,23 @@ public class SQLRecordStore implements RecordStore {
     this.durability = durability;
     this.batchSize = Math.max(1, batchSize);
     this.pendingInserts = new ArrayList<>(this.batchSize);
-    this.readQuery = "SELECT RAW t FROM " + keySpace + " AS t WHERE META(t).id = $1";
+    this.readQuery = "SELECT RAW t FROM " + keySpace + " AS t USE KEYS [$1]";
     this.scanQuery = "SELECT RAW t FROM " + keySpace
         + " AS t WHERE META(t).id >= $1 ORDER BY META(t).id LIMIT $2";
-    this.deleteQuery = "DELETE FROM " + keySpace + " AS t WHERE META(t).id = $1";
+    this.deleteQuery = "DELETE FROM " + keySpace + " AS t USE KEYS [$1]";
     if (ttl.isZero()) {
       this.upsertQuery = "UPSERT INTO " + keySpace + " (KEY, VALUE) VALUES ($1, $2)";
       this.batchUpsertQuery = "UPSERT INTO " + keySpace
-          + " (KEY __k, VALUE __v) SELECT d.k, d.v FROM $docs AS d";
+          + " (KEY k, VALUE v) SELECT d.k AS k, d.v AS v FROM $docs AS d";
       this.updateQuery = "UPDATE " + keySpace
-          + " AS t SET t = OBJECT_CONCAT(t, $2) WHERE META(t).id = $1";
+          + " AS t USE KEYS [$1] SET t = OBJECT_CONCAT(t, $2)";
     } else {
       this.upsertQuery = "UPSERT INTO " + keySpace + " (KEY, VALUE, OPTIONS) VALUES ($1, $2, $3)";
       this.batchUpsertQuery = "UPSERT INTO " + keySpace
-          + " (KEY __k, VALUE __v, OPTIONS __o) SELECT d.k, d.v, {\"expiration\": "
-          + ttl.getSeconds() + "} FROM $docs AS d";
+          + " (KEY k, VALUE v, OPTIONS o) SELECT d.k AS k, d.v AS v, {\"expiration\": "
+          + ttl.getSeconds() + "} AS o FROM $docs AS d";
       this.updateQuery = "UPDATE " + keySpace
-          + " AS t SET t = OBJECT_CONCAT(t, $2), META(t).expiration = $3 WHERE META(t).id = $1";
+          + " AS t USE KEYS [$1] SET t = OBJECT_CONCAT(t, $2), META(t).expiration = $3";
     }
   }
 
@@ -92,7 +96,7 @@ public class SQLRecordStore implements RecordStore {
       return flushed;
     }
     try {
-      QueryResult queryResult = cluster.query(readQuery, readOptions(JsonArray.from(key)));
+      QueryResult queryResult = cluster.query(readQuery, pointReadOptions(JsonArray.from(key)));
       List<JsonObject> rows = queryResult.rowsAs(JsonObject.class);
       if (rows.isEmpty()) {
         return Status.NOT_FOUND;
@@ -114,19 +118,32 @@ public class SQLRecordStore implements RecordStore {
     if (!flushed.isOk()) {
       return flushed;
     }
-    try {
-      JsonObject patch = JsonObject.fromJson(MapTranscoder.encodeMapRecord(values));
-      JsonArray params = ttl.isZero()
-          ? JsonArray.from(key, patch)
-          : JsonArray.from(key, patch, ttl.getSeconds());
-      QueryResult queryResult = cluster.query(updateQuery, mutationOptions(params));
-      if (mutationCount(queryResult) == 0) {
-        return Status.NOT_FOUND;
+    JsonObject patch = JsonObject.fromJson(MapTranscoder.encodeMapRecord(values));
+    JsonArray params = ttl.isZero()
+        ? JsonArray.from(key, patch)
+        : JsonArray.from(key, patch, ttl.getSeconds());
+    int attempts = 0;
+    while (true) {
+      try {
+        QueryResult queryResult = cluster.query(updateQuery, mutationOptions(params));
+        if (mutationCount(queryResult) == 0) {
+          return Status.NOT_FOUND;
+        }
+        return Status.OK;
+      } catch (Throwable t) {
+        attempts++;
+        if (attempts >= UPDATE_CAS_RETRIES || !isTransientCasMismatch(t)) {
+          LOGGER.error("update transaction exception: {}", t.getMessage(), t);
+          return Status.ERROR;
+        }
+        try {
+          Thread.sleep(10L * attempts);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          LOGGER.error("update CAS retry interrupted: {}", t.getMessage(), t);
+          return Status.ERROR;
+        }
       }
-      return Status.OK;
-    } catch (Throwable t) {
-      LOGGER.error("update transaction exception: {}", t.getMessage(), t);
-      return Status.ERROR;
     }
   }
 
@@ -171,16 +188,29 @@ public class SQLRecordStore implements RecordStore {
     if (!flushed.isOk()) {
       return flushed;
     }
-    try {
-      QueryResult queryResult = cluster.query(scanQuery, readOptions(JsonArray.from(startkey, recordcount)));
-      List<JsonObject> rows = queryResult.rowsAs(JsonObject.class);
-      result.addAll(rows.stream()
-          .map(row -> MapTranscoder.decodeRecord(row.toBytes()))
-          .toList());
-      return Status.OK;
-    } catch (Throwable t) {
-      LOGGER.error("scan transaction exception: {}", t.getMessage(), t);
-      return Status.ERROR;
+    int attempts = 0;
+    while (true) {
+      try {
+        QueryResult queryResult = cluster.query(scanQuery, scanOptions(JsonArray.from(startkey, recordcount)));
+        List<JsonObject> rows = queryResult.rowsAs(JsonObject.class);
+        result.addAll(rows.stream()
+            .map(row -> MapTranscoder.decodeRecord(row.toBytes()))
+            .toList());
+        return Status.OK;
+      } catch (Throwable t) {
+        attempts++;
+        if (attempts >= 5 || !isTransientIndexError(t)) {
+          LOGGER.error("scan transaction exception: {}", t.getMessage(), t);
+          return Status.ERROR;
+        }
+        try {
+          Thread.sleep(200L * attempts);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          LOGGER.error("scan retry interrupted: {}", t.getMessage(), t);
+          return Status.ERROR;
+        }
+      }
     }
   }
 
@@ -224,13 +254,35 @@ public class SQLRecordStore implements RecordStore {
     }
   }
 
-  private QueryOptions readOptions(JsonArray params) {
+  private QueryOptions pointReadOptions(JsonArray params) {
     return queryOptions()
         .adhoc(false)
         .readonly(true)
         .metrics(false)
-        .useReplica(true)
         .parameters(params);
+  }
+
+  private QueryOptions scanOptions(JsonArray params) {
+    // Range scan uses idx_meta_id; REQUEST_PLUS avoids empty scans right after load UPSERTs.
+    return queryOptions()
+        .adhoc(false)
+        .readonly(true)
+        .metrics(false)
+        .scanConsistency(QueryScanConsistency.REQUEST_PLUS)
+        .parameters(params);
+  }
+
+  private static boolean isTransientIndexError(Throwable t) {
+    String message = String.valueOf(t.getMessage());
+    return message.contains("Index not found") || message.contains("indexing.error");
+  }
+
+  private static boolean isTransientCasMismatch(Throwable t) {
+    if (t instanceof CasMismatchException) {
+      return true;
+    }
+    String message = String.valueOf(t.getMessage());
+    return message.contains("CAS mismatch") || message.contains("CAS_mismatch");
   }
 
   private QueryOptions mutationOptions(JsonArray params) {

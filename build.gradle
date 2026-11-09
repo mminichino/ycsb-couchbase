@@ -75,6 +75,16 @@ tasks.named('test') {
     onlyIf {
         requestedTasks.any { it.contains('test') }
     }
+    def envFile = layout.projectDirectory.file('.env').asFile
+    if (envFile.exists()) {
+        envFile.eachLine { line ->
+            def trimmed = line.trim()
+            if (trimmed && !trimmed.startsWith('#') && trimmed.contains('=')) {
+                def idx = trimmed.indexOf('=')
+                environment trimmed.substring(0, idx).trim(), trimmed.substring(idx + 1).trim()
+            }
+        }
+    }
     testLogging {
         events "PASSED", "SKIPPED", "FAILED"
         exceptionFormat = TestExceptionFormat.FULL

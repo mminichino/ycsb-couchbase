@@ -123,7 +123,6 @@ public class ProtobufRecordStore implements RecordStore {
               .adhoc(false)
               .readonly(true)
               .metrics(false)
-              .useReplica(true)
               .parameters(JsonArray.from(startkey, recordcount)))
           .flatMapMany(reactiveQueryResult -> reactiveQueryResult.rowsAs(String.class))
           .flatMapSequential(docId -> collection.reactive().get(docId)
