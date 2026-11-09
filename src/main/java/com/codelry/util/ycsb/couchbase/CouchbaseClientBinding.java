@@ -91,18 +91,19 @@ public class CouchbaseClientBinding extends DB {
       }
     }
 
-    recordStore = createRecordStore(recordStoreType);
+    recordStore = createRecordStore(recordStoreType, keySpace);
     OPEN_CLIENTS.incrementAndGet();
   }
 
-  private RecordStore createRecordStore(String recordStoreType) throws DBException {
+  private RecordStore createRecordStore(String recordStoreType, String keySpace) throws DBException {
     return switch (recordStoreType) {
       case "json" -> new JsonRecordStore(cluster, collection, query, TTL, durability);
       case "protobuf" -> new ProtobufRecordStore(cluster, collection, query, TTL, durability);
       case "replicaread" -> new ReplicaReadRecordStore(cluster, collection, query, TTL, durability,
           options);
+      case "sql" -> new SQLRecordStore(cluster, keySpace, TTL, durability);
       default -> throw new DBException("Unknown couchbase.recordstore value: " + recordStoreType
-          + " (expected json, protobuf, or replicaread)");
+          + " (expected json, protobuf, replicaread, or sql)");
     };
   }
 

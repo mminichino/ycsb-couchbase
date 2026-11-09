@@ -24,8 +24,8 @@ def cbliteVersion = '4.1.2'
 dependencies {
     implementation 'com.codelry.util.ycsb:ycsb-core:0.18.8'
     implementation 'com.codelry.util:restfull-core:1.0.5'
-    implementation 'com.fasterxml.jackson.core:jackson-core:2.22.3'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.22.4'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.4'
     implementation 'com.couchbase.client:java-client:3.13.0'
     implementation "com.couchbase.lite:couchbase-lite-java-ee:${cbliteVersion}"
     implementation 'com.google.code.gson:gson:2.14.0'
@@ -177,6 +177,12 @@ jreleaser {
             repoOwner = 'mminichino'
             name = 'ycsb-couchbase'
             branch = 'main'
+            // Recreate the GitHub release for the current build.gradle version on each publish.
+            overwrite = true
+            // Avoid listing/closing milestones; GITHUB_TOKEN with contents:write cannot use that API.
+            milestone {
+                close = false
+            }
             changelog {
                 enabled = false
             }
