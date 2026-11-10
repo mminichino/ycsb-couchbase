@@ -2,6 +2,7 @@ package com.codelry.util.ycsb.couchbase;
 
 import com.codelry.util.cbdb3.CouchbaseConfig;
 import com.codelry.util.cbdb3.CouchbaseConnect;
+import com.codelry.util.ycsb.Benchmark;
 import com.codelry.util.ycsb.ByteIterator;
 import com.codelry.util.ycsb.DB;
 import com.codelry.util.ycsb.DBException;
@@ -59,6 +60,9 @@ public class CouchbaseClientBinding extends DB {
     String recordStoreType = properties.getProperty(COUCHBASE_RECORDSTORE, "json").toLowerCase();
     int batchSize = Integer.parseInt(properties.getProperty(BATCH_SIZE,
         Integer.toString(SQLRecordStore.DEFAULT_BATCH_SIZE)));
+    // YCSB load sets dotransactions=false; run/transactions defaults to true.
+    boolean loadMode = !Boolean.parseBoolean(
+        properties.getProperty(Benchmark.DO_TRANSACTIONS_PROPERTY, "true"));
     boolean debug = getProperties().getProperty("couchbase.debug", "false").equals("true");
     String keySpace = bucketName + "." + scopeName + "." + collectionName;
     query = "SELECT RAW META(t).id FROM " + keySpace + " AS t WHERE META(t).id >= $1 ORDER BY META(t).id LIMIT $2;";
@@ -94,18 +98,19 @@ public class CouchbaseClientBinding extends DB {
       }
     }
 
-    recordStore = createRecordStore(recordStoreType, keySpace, batchSize);
+    recordStore = createRecordStore(recordStoreType, keySpace, batchSize, loadMode);
     OPEN_CLIENTS.incrementAndGet();
   }
 
-  private RecordStore createRecordStore(String recordStoreType, String keySpace, int batchSize)
-      throws DBException {
+  private RecordStore createRecordStore(String recordStoreType, String keySpace, int batchSize,
+                                        boolean loadMode) throws DBException {
     return switch (recordStoreType) {
       case "json" -> new JsonRecordStore(cluster, collection, query, TTL, durability);
       case "protobuf" -> new ProtobufRecordStore(cluster, collection, query, TTL, durability);
       case "replicaread" -> new ReplicaReadRecordStore(cluster, collection, query, TTL, durability,
           options);
-      case "sql" -> new SQLRecordStore(cluster, keySpace, TTL, durability, batchSize);
+      case "sql" -> new SQLRecordStore(cluster, collection, keySpace, TTL, durability, batchSize,
+          loadMode);
       default -> throw new DBException("Unknown couchbase.recordstore value: " + recordStoreType
           + " (expected json, protobuf, replicaread, or sql)");
     };

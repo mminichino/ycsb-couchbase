@@ -1,18 +1,22 @@
 package com.codelry.util.ycsb.couchbase;
 
 import static com.couchbase.client.java.query.QueryOptions.queryOptions;
+import static java.lang.Math.min;
 
 import com.codelry.util.ycsb.ByteIterator;
 import com.codelry.util.ycsb.Status;
+import com.couchbase.client.core.error.DocumentNotFoundException;
 import com.couchbase.client.core.msg.kv.DurabilityLevel;
 import com.couchbase.client.java.Cluster;
+import com.couchbase.client.java.Collection;
 import com.couchbase.client.java.json.JsonArray;
 import com.couchbase.client.java.json.JsonObject;
+import com.couchbase.client.java.kv.GetResult;
 import com.couchbase.client.java.query.QueryOptions;
 import com.couchbase.client.java.query.QueryResult;
-import com.couchbase.client.java.query.QueryScanConsistency;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -23,13 +27,15 @@ import java.util.Set;
 import java.util.Vector;
 
 /**
- * JSON record store that performs all YCSB operations via SQL++ (no KV API).
- * Point ops use {@code USE KEYS}; range scan uses {@code META().id} against the setup index.
- * Documents use the same {@link MapTranscoder} serialization as {@link JsonRecordStore}.
+ * JSON record store that performs YCSB point/mutation ops via SQL++ ({@code USE KEYS}).
+ * Scan matches {@link JsonRecordStore}: SQL++ lists {@code META().id} values, then documents are
+ * fetched by id. Documents use the same {@link MapTranscoder} serialization as
+ * {@link JsonRecordStore}.
  *
- * <p>Inserts are buffered and flushed in SQL++ multi-document {@code UPSERT} batches of
- * {@link #DEFAULT_BATCH_SIZE} (configurable via {@code batchsize}), matching the YCSB postgres
- * relational store load pattern.
+ * <p>During YCSB load ({@code dotransactions=false}), inserts are buffered and flushed in SQL++
+ * multi-document {@code UPSERT} batches of {@link #DEFAULT_BATCH_SIZE} (configurable via
+ * {@code batchsize}). During the transaction phase, each insert is executed immediately so
+ * read-latest workloads (e.g. D) can see newly inserted keys.
  */
 public class SQLRecordStore implements RecordStore {
   private static final Logger LOGGER = LoggerFactory.getLogger(SQLRecordStore.class);
@@ -37,30 +43,40 @@ public class SQLRecordStore implements RecordStore {
   public static final int DEFAULT_BATCH_SIZE = 100;
 
   private final Cluster cluster;
+  private final Collection collection;
+  private final String scanQuery;
   private final Duration ttl;
   private final DurabilityLevel durability;
+  private final boolean loadMode;
   private final int batchSize;
   private final List<PendingInsert> pendingInserts;
   private final String readQuery;
-  private final String scanQuery;
   private final String upsertQuery;
   private final String batchUpsertQuery;
   private final String updateQuery;
   private final String deleteQuery;
 
-  public SQLRecordStore(Cluster cluster, String keySpace, Duration ttl, DurabilityLevel durability) {
-    this(cluster, keySpace, ttl, durability, DEFAULT_BATCH_SIZE);
+  public SQLRecordStore(Cluster cluster, Collection collection, String keySpace, Duration ttl,
+                        DurabilityLevel durability) {
+    this(cluster, collection, keySpace, ttl, durability, DEFAULT_BATCH_SIZE, true);
   }
 
-  public SQLRecordStore(Cluster cluster, String keySpace, Duration ttl, DurabilityLevel durability,
-                        int batchSize) {
+  public SQLRecordStore(Cluster cluster, Collection collection, String keySpace, Duration ttl,
+                        DurabilityLevel durability, int batchSize) {
+    this(cluster, collection, keySpace, ttl, durability, batchSize, true);
+  }
+
+  public SQLRecordStore(Cluster cluster, Collection collection, String keySpace, Duration ttl,
+                        DurabilityLevel durability, int batchSize, boolean loadMode) {
     this.cluster = cluster;
+    this.collection = collection;
     this.ttl = ttl;
     this.durability = durability;
+    this.loadMode = loadMode;
     this.batchSize = Math.max(1, batchSize);
-    this.pendingInserts = new ArrayList<>(this.batchSize);
+    this.pendingInserts = loadMode ? new ArrayList<>(this.batchSize) : List.of();
     this.readQuery = "SELECT RAW t FROM " + keySpace + " AS t USE KEYS [$1]";
-    this.scanQuery = "SELECT RAW t FROM " + keySpace
+    this.scanQuery = "SELECT RAW META(t).id FROM " + keySpace
         + " AS t WHERE META(t).id >= $1 ORDER BY META(t).id LIMIT $2";
     this.deleteQuery = "DELETE FROM " + keySpace + " AS t USE KEYS [$1]";
     if (ttl.isZero()) {
@@ -92,10 +108,6 @@ public class SQLRecordStore implements RecordStore {
 
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
-    Status flushed = flushPendingInserts();
-    if (!flushed.isOk()) {
-      return flushed;
-    }
     try {
       QueryResult queryResult = cluster.query(readQuery, pointReadOptions(JsonArray.from(key)));
       List<JsonObject> rows = queryResult.rowsAs(JsonObject.class);
@@ -115,10 +127,6 @@ public class SQLRecordStore implements RecordStore {
 
   @Override
   public Status update(String table, String key, Map<String, ByteIterator> values) {
-    Status flushed = flushPendingInserts();
-    if (!flushed.isOk()) {
-      return flushed;
-    }
     try {
       JsonObject patch = JsonObject.fromJson(MapTranscoder.encodeMapRecord(values));
       JsonArray params = ttl.isZero()
@@ -137,7 +145,7 @@ public class SQLRecordStore implements RecordStore {
 
   @Override
   public Status insert(String table, String key, Map<String, ByteIterator> values) {
-    if (batchSize <= 1) {
+    if (!loadMode || batchSize <= 1) {
       return executeInsert(key, values);
     }
 
@@ -153,10 +161,6 @@ public class SQLRecordStore implements RecordStore {
 
   @Override
   public Status delete(String table, String key) {
-    Status flushed = flushPendingInserts();
-    if (!flushed.isOk()) {
-      return flushed;
-    }
     try {
       QueryResult queryResult = cluster.query(deleteQuery, mutationOptions(JsonArray.from(key)));
       if (mutationCount(queryResult) == 0) {
@@ -172,33 +176,24 @@ public class SQLRecordStore implements RecordStore {
   @Override
   public Status scan(String table, String startkey, int recordcount, Set<String> fields,
                      Vector<HashMap<String, ByteIterator>> result) {
-    Status flushed = flushPendingInserts();
-    if (!flushed.isOk()) {
-      return flushed;
-    }
-    int attempts = 0;
-    while (true) {
-      try {
-        QueryResult queryResult = cluster.query(scanQuery, scanOptions(JsonArray.from(startkey, recordcount)));
-        List<JsonObject> rows = queryResult.rowsAs(JsonObject.class);
-        result.addAll(rows.stream()
-            .map(row -> MapTranscoder.decodeRecord(row.toBytes()))
-            .toList());
-        return Status.OK;
-      } catch (Throwable t) {
-        attempts++;
-        if (attempts >= 5 || !isTransientIndexError(t)) {
-          LOGGER.error("scan transaction exception: {}", t.getMessage(), t);
-          return Status.ERROR;
-        }
-        try {
-          Thread.sleep(200L * attempts);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-          LOGGER.error("scan retry interrupted: {}", t.getMessage(), t);
-          return Status.ERROR;
-        }
-      }
+    try {
+      List<byte[]> docs = cluster.reactive().query(scanQuery, queryOptions()
+              .adhoc(false)
+              .readonly(true)
+              .metrics(false)
+              .parameters(JsonArray.from(startkey, recordcount)))
+          .flatMapMany(reactiveQueryResult -> reactiveQueryResult.rowsAs(String.class))
+          .flatMapSequential(docId -> collection.reactive().get(docId)
+              .map(GetResult::contentAsBytes)
+              .onErrorResume(DocumentNotFoundException.class, e -> Mono.empty()), min(256, recordcount))
+          .collectList()
+          .block();
+      assert docs != null;
+      result.addAll(docs.stream().map(MapTranscoder::decodeRecord).toList());
+      return Status.OK;
+    } catch (Throwable t) {
+      LOGGER.error("scan transaction exception: {}", t.getMessage(), t);
+      return Status.ERROR;
     }
   }
 
@@ -248,21 +243,6 @@ public class SQLRecordStore implements RecordStore {
         .readonly(true)
         .metrics(false)
         .parameters(params);
-  }
-
-  private QueryOptions scanOptions(JsonArray params) {
-    // Range scan uses idx_meta_id; REQUEST_PLUS avoids empty scans right after load UPSERTs.
-    return queryOptions()
-        .adhoc(false)
-        .readonly(true)
-        .metrics(false)
-        .scanConsistency(QueryScanConsistency.REQUEST_PLUS)
-        .parameters(params);
-  }
-
-  private static boolean isTransientIndexError(Throwable t) {
-    String message = String.valueOf(t.getMessage());
-    return message.contains("Index not found") || message.contains("indexing.error");
   }
 
   private QueryOptions mutationOptions(JsonArray params) {
