@@ -26,15 +26,15 @@ dependencies {
     implementation 'com.codelry.util:restfull-core:1.0.5'
     implementation 'com.fasterxml.jackson.core:jackson-core:2.22.4'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.4'
-    implementation 'com.couchbase.client:java-client:3.13.0'
+    implementation 'com.couchbase.client:java-client:3.13.1'
     implementation "com.couchbase.lite:couchbase-lite-java-ee:${cbliteVersion}"
     implementation 'com.google.code.gson:gson:2.14.0'
     implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
     implementation 'com.codelry.util:couchbase-connect-sdk3:1.2.6'
     implementation 'org.apache.logging.log4j:log4j-core:2.26.1'
     implementation 'commons-cli:commons-cli:1.11.0'
-    implementation 'io.netty:netty-resolver-dns-native-macos:4.2.19.Final:osx-aarch_64'
-    implementation 'io.netty:netty-resolver-dns-native-macos:4.2.19.Final:osx-x86_64'
+    implementation 'io.netty:netty-resolver-dns-native-macos:4.2.21.Final:osx-aarch_64'
+    implementation 'io.netty:netty-resolver-dns-native-macos:4.2.21.Final:osx-x86_64'
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -74,16 +74,6 @@ tasks.named('test') {
     maxParallelForks = 1
     onlyIf {
         requestedTasks.any { it.contains('test') }
-    }
-    def envFile = layout.projectDirectory.file('.env').asFile
-    if (envFile.exists()) {
-        envFile.eachLine { line ->
-            def trimmed = line.trim()
-            if (trimmed && !trimmed.startsWith('#') && trimmed.contains('=')) {
-                def idx = trimmed.indexOf('=')
-                environment trimmed.substring(0, idx).trim(), trimmed.substring(idx + 1).trim()
-            }
-        }
     }
     testLogging {
         events "PASSED", "SKIPPED", "FAILED"

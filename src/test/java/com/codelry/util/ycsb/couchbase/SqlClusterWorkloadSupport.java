@@ -17,7 +17,7 @@ import static com.codelry.util.ycsb.Benchmark.DO_TRANSACTIONS_PROPERTY;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Shared helpers for live-cluster SQL record store workload smoke tests.
+ * Shared helpers for SQL record store workload smoke tests run against a Testcontainers cluster.
  */
 final class SqlClusterWorkloadSupport {
   private static final Pattern FAILED_OPS = Pattern.compile(
@@ -26,31 +26,28 @@ final class SqlClusterWorkloadSupport {
   private SqlClusterWorkloadSupport() {
   }
 
-  static void runWorkload(String workload, String host, String username, String password) {
+  static void runWorkload(String workload) {
     Benchmark benchmark = new Benchmark();
-    benchmark.run(loadPhaseProperties(workload, host, username, password));
-    benchmark.run(runPhaseProperties(workload, host, username, password));
+    benchmark.run(loadPhaseProperties(workload));
+    benchmark.run(runPhaseProperties(workload));
     assertNoFailedOperations(workload);
   }
 
-  static Properties loadPhaseProperties(String workload, String host, String username, String password) {
-    Properties props = baseProperties(workload, host, username, password);
+  static Properties loadPhaseProperties(String workload) {
+    Properties props = baseProperties(workload);
     props.setProperty(DO_TRANSACTIONS_PROPERTY, "false");
     props.setProperty("maxexecutiontime", "0");
     return props;
   }
 
-  static Properties runPhaseProperties(String workload, String host, String username, String password) {
-    Properties props = baseProperties(workload, host, username, password);
+  static Properties runPhaseProperties(String workload) {
+    Properties props = baseProperties(workload);
     props.setProperty(DO_TRANSACTIONS_PROPERTY, "true");
     return props;
   }
 
-  static Properties baseProperties(String workload, String host, String username, String password) {
+  static Properties baseProperties(String workload) {
     Properties props = ClusterPropertiesLoader.load(workload);
-    props.setProperty("couchbase.hostname", host);
-    props.setProperty("couchbase.username", username);
-    props.setProperty("couchbase.password", password);
     props.setProperty("couchbase.recordstore", "sql");
     props.setProperty("batchsize", Integer.toString(SQLRecordStore.DEFAULT_BATCH_SIZE));
     props.setProperty("recordcount", "200");
