@@ -162,11 +162,17 @@ tasks.named("distTar") {
     compression = Compression.GZIP
 }
 
+// Resolve the target repo from the CI environment (owner/repo) so releases are
+// created on whichever remote the workflow runs in; fall back to the original repo locally.
+def ghRepo = (System.getenv('GITHUB_REPOSITORY') ?: 'mminichino/ycsb-couchbase').split('/')
+def ghOwner = ghRepo[0]
+def ghName = ghRepo[1]
+
 jreleaser {
     project {
         name = 'ycsb-couchbase'
         description = 'Couchbase YCSB implementation'
-        website = 'https://github.com/mminichino/ycsb-couchbase'
+        website = "https://github.com/${ghOwner}/${ghName}"
         authors = ['Michael Minichino']
         license = 'Apache-2.0'
         copyright = "2026 Michael Minichino"
@@ -174,8 +180,8 @@ jreleaser {
 
     release {
         github {
-            repoOwner = 'mminichino'
-            name = 'ycsb-couchbase'
+            repoOwner = ghOwner
+            name = ghName
             branch = 'main'
             // Recreate the GitHub release for the current build.gradle version on each publish.
             overwrite = true
